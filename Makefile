@@ -9,4 +9,4 @@ flake:
 	@echo "flake8 passed"
 
 test:
-	py.test --pyargs shablona --cov-report term-missing --cov=shablona
+	py.test --pyargs clustering --cov-report term-missing --cov=clustering
