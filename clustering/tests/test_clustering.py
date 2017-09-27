@@ -3,108 +3,60 @@ import os.path as op
 import numpy as np
 import pandas as pd
 import numpy.testing as npt
-import clustering as sb
+import clustering as cl
+import gsd.hoomd
 
-data_path = op.join(sb.__path__[0], 'data')
+data_path = op.join(cl.__path__[0], 'data')
 
 
-def test_transform_data():
+def test_ClusterSnapshot_init():
     """
-    Testing the transformation of the data from raw data to functions
-    used for fitting a function.
-
+    Testing the instantiation of a Cluster Snapshot
     """
-    # We start with actual data. We test here just that reading the data in
-    # different ways ultimately generates the same arrays.
-    from matplotlib import mlab
-    ortho = mlab.csv2rec(op.join(data_path, 'ortho.csv'))
-    x1, y1, n1 = sb.transform_data(ortho)
-    x2, y2, n2 = sb.transform_data(op.join(data_path, 'ortho.csv'))
-    npt.assert_equal(x1, x2)
-    npt.assert_equal(y1, y2)
-    # We can also be a bit more critical, by testing with data that we
-    # generate, and should produce a particular answer:
-    my_data = pd.DataFrame(
-        np.array([[0.1, 2], [0.1, 1], [0.2, 2], [0.2, 2], [0.3, 1],
-                  [0.3, 1]]),
-        columns=['contrast1', 'answer'])
-    my_x, my_y, my_n = sb.transform_data(my_data)
-    npt.assert_equal(my_x, np.array([0.1, 0.2, 0.3]))
-    npt.assert_equal(my_y, np.array([0.5, 0, 1.0]))
-    npt.assert_equal(my_n, np.array([2, 2, 2]))
-
-
-def test_cum_gauss():
-    sigma = 1
-    mu = 0
-    x = np.linspace(-1, 1, 12)
-    y = sb.cumgauss(x, mu, sigma)
-    # A basic test that the input and output have the same shape:
-    npt.assert_equal(y.shape, x.shape)
-    # The function evaluated over items symmetrical about mu should be
-    # symmetrical relative to 0 and 1:
-    npt.assert_equal(y[0], 1 - y[-1])
-    # Approximately 68% of the Gaussian distribution is in mu +/- sigma, so
-    # the value of the cumulative Gaussian at mu - sigma should be
-    # approximately equal to (1 - 0.68/2). Note the low precision!
-    npt.assert_almost_equal(y[0], (1 - 0.68) / 2, decimal=2)
-
-
-def test_opt_err_func():
-    # We define a truly silly function, that returns its input, regardless of
-    # the params:
-    def my_silly_func(x, my_first_silly_param, my_other_silly_param):
-        return x
-
-    # The silly function takes two parameters and ignores them
-    my_params = [1, 10]
-    my_x = np.linspace(-1, 1, 12)
-    my_y = my_x
-    my_err = sb.opt_err_func(my_params, my_x, my_y, my_silly_func)
-    # Since x and y are equal, the error is zero:
-    npt.assert_equal(my_err, np.zeros(my_x.shape[0]))
-
-    # Let's consider a slightly less silly function, that implements a linear
-    # relationship between inputs and outputs:
-    def not_so_silly_func(x, a, b):
-        return x * a + b
-
-    my_params = [1, 10]
-    my_x = np.linspace(-1, 1, 12)
-    # To test this, we calculate the relationship explicitely:
-    my_y = my_x * my_params[0] + my_params[1]
-    my_err = sb.opt_err_func(my_params, my_x, my_y, not_so_silly_func)
-    # Since x and y are equal, the error is zero:
-    npt.assert_equal(my_err, np.zeros(my_x.shape[0]))
-
-
-def test_Model():
-    """ """
-    M = sb.Model()
-    x = np.linspace(0.1, 0.9, 22)
-    target_mu = 0.5
-    target_sigma = 1
-    target_y = sb.cumgauss(x, target_mu, target_sigma)
-    F = M.fit(x, target_y, initial=[target_mu, target_sigma])
-    npt.assert_equal(F.predict(x), target_y)
-
-
-def test_params_regression():
+    fname = 'mols2.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = 17
+    clustSnap = cl.ClusterSnapshot(0,traj,ats)
+    assert clustSnap.timestep == 0
+    sz = np.shape(traj[0].particles.position)
+    assert len(clustSnap.clusterIDs) == sz[0] / ats   
+ 
+def test_ContactClusterSnapshot_init():
     """
-    Test for regressions in model parameter values from provided data
+    Testing the instantiation of a Cluster Snapshot
     """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = 17
+    cutoff= 1.1
+    t = 97
+    clustSnap = cl.ContactClusterSnapshot(t,traj,ats,cutoff)
+    assert clustSnap.timestep == t
+    sz = np.shape(traj[t].particles.position)
+    assert len(clustSnap.clusterIDs) == sz[0] / ats   
+    assert clustSnap.nclusts == 2
+    
+       
+def test_conOptDist():
+    """
+    Testing the contact and optical distance metric
+    
+    Two test cases, both essentially in 2D
+    (i) two parallel molecules (so you get the same distance as minimum), r = 1.0
+    (ii) two angled molecules, r = 2.0
+    """
+    molA1 = np.array([0.,0.,0.,1.,1.,0.,2.,2.,0.,3.,3.,0.,4.,4.,0.])
+    molB1 = np.array([0.,-2.,0.,1.,-3.,0.,2.,-4.,0.,3.,-5.,0.,4.,-6.,0.])
+    molA2 = np.array([0.,1.,0.,1.,1.,0.,2.,1.,0.,3.,1.,0.,4.,1.,0.])
+    molB2 = np.array([0.,0.,0.,1.,0.,0.,2.,0.,0.,3.,0.,0.,4.,0.,0.])
+    
+    r1 = cl.conOptDistance(molA1,molB1)
+    r2 = cl.conOptDistance(molA2,molB2)
+    npt.assert_almost_equal(r1,2.0,decimal=10)
+    npt.assert_almost_equal(r2,1.0,decimal=10)
+    
+if __name__ == "__main__":
+    test_ContactClusterSnapshot_init()
 
-    model = sb.Model()
-    ortho_x, ortho_y, ortho_n = sb.transform_data(op.join(data_path,
-                                                          'ortho.csv'))
-
-    para_x, para_y, para_n = sb.transform_data(op.join(data_path,
-                                                       'para.csv'))
-
-    ortho_fit = model.fit(ortho_x, ortho_y)
-    para_fit = model.fit(para_x, para_y)
-
-    npt.assert_almost_equal(ortho_fit.params[0], 0.46438638)
-    npt.assert_almost_equal(ortho_fit.params[1], 0.13845926)
-    npt.assert_almost_equal(para_fit.params[0], 0.57456788)
-    npt.assert_almost_equal(para_fit.params[1], 0.13684096)

@@ -1,19 +1,25 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
 import pandas as pd
+import gsd.hoomd
+import sklearn
 import scipy.optimize as opt
+from sklearn.neighbors import BallTree
+from sklearn.neighbors import radius_neighbors_graph
+from scipy.spatial.distance import cdist
 from scipy.special import erf
+from scipy.sparse.csgraph import connected_components
 from .due import due, Doi
 
-__all__ = ["Model", "Fit", "opt_err_func", "transform_data", "cumgauss"]
+__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","Fit", "transform_data","conOptDistance"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
 # be cited. This does nothing, unless the user has duecredit installed,
 # And calls this with duecredit (as in `python -m duecredit script.py`):
 due.cite(Doi("10.1167/13.9.30"),
-         description="Template project for small scientific Python projects",
-         tags=["reference-implementation"],
+         description="Simple data analysis for clustering application",
+         tags=["data-analysis","clustering"],
          path='clustering')
 
 
@@ -40,133 +46,110 @@ def transform_data(data):
     n : array
         The number of trials in each x,y condition
     """
-    if isinstance(data, str):
-        data = pd.read_csv(data)
 
-    contrast1 = data['contrast1']
-    answers = data['answer']
-
-    x = np.unique(contrast1)
-    y = []
-    n = []
-
-    for c in x:
-        idx = np.where(contrast1 == c)
-        n.append(float(len(idx[0])))
-        answer1 = len(np.where(answers[idx[0]] == 1)[0])
-        y.append(answer1 / n[-1])
-    return x, y, n
-
-
-def cumgauss(x, mu, sigma):
+def conOptDistance(x,y):
     """
-    The cumulative Gaussian at x, for the distribution with mean mu and
-    standard deviation sigma.
-
-    Parameters
-    ----------
-    x : float or array
-       The values of x over which to evaluate the cumulative Gaussian function
-
-    mu : float
-       The mean parameter. Determines the x value at which the y value is 0.5
-
-    sigma : float
-       The variance parameter. Determines the slope of the curve at the point
-       of Deflection
-
-    Returns
-    -------
-
-    g : float or array
-        The cumulative gaussian with mean $\\mu$ and variance $\\sigma$
-        evaluated at all points in `x`.
-
-    Notes
-    -----
-    Based on:
-    http://en.wikipedia.org/wiki/Normal_distribution#Cumulative_distribution_function
-
-    The cumulative Gaussian function is defined as:
-
-    .. math::
-
-        \\Phi(x) = \\frac{1}{2} [1 + erf(\\frac{x}{\\sqrt{2}})]
-
-    Where, $erf$, the error function is defined as:
-
-    .. math::
-
-        erf(x) = \\frac{1}{\\sqrt{\\pi}} \int_{-x}^{x} e^{t^2} dt
-
+    Function that computes the distance between molecules for contact
+    or optical clusters
+    
+    Parameters:
+    -----------
+    x : array
+        The 1D array of size 3*ats representing the first molecule
+    y : array
+        The 1D array of size 3*ats representing the second molecule
+    r : float
+        The distance between x and y computed as the minimum distance
+        between any two beads in the molecules
     """
-    return 0.5 * (1 + erf((x - mu) / (np.sqrt(2) * sigma)))
+    if len(x) % 3 != 0:
+        raise RuntimeError("3D array has a number of entries not divisible \
+                            by 3.")
+    ats = len(x)/3
+    xa = np.reshape(x,[ats,3])
+    ya = np.reshape(y,[ats,3])
+    return np.min(cdist(xa,ya,metric='euclidean'))
+            
 
 
-def opt_err_func(params, x, y, func):
-    """
-    Error function for fitting a function using non-linear optimization.
-
-    Parameters
-    ----------
-    params : tuple
-        A tuple with the parameters of `func` according to their order of
-        input
-
-    x : float array
-        An independent variable.
-
-    y : float array
-        The dependent variable.
-
-    func : function
-        A function with inputs: `(x, *params)`
-
-    Returns
-    -------
-    float array
-        The marginals of the fit to x/y given the params
-    """
-    return y - func(x, *params)
-
-
-class Model(object):
-    """Class for fitting cumulative Gaussian functions to data"""
-    def __init__(self, func=cumgauss):
-        """ Initialize a model object.
+class ClusterSnapshot(object):
+    """Class for tracking the location of clusters at each time step"""
+    
+    def __init__(self, t, traj, ats):
+        """ Initialize a ClusterSnapshot object.
 
         Parameters
         ----------
-        data : Pandas DataFrame
-            Data from a subjective contrast judgement experiment
+        t: timestep
 
-        func : callable, optional
-            A function that relates x and y through a set of parameters.
-            Default: :func:`cumgauss`
+        snapshot: a gsd.hoomd snapshot at some time t
+        
+        ats: the number of beads in a single molecule
         """
-        self.func = func
+        snapshot = traj[t]
+        self.timestep = t
+        self.binds = np.argsort(snapshot.particles.body)
+        self.pos = snapshot.particles.position[self.binds]
+        sz = np.shape(self.pos)
+        if sz[0] % ats != 0:
+            raise RuntimeError("Number of particles not divisible by number \
+                                of beads per molecules.")
+        self.clusterIDs = np.zeros(sz[0]/ats)
+        
 
-    def fit(self, x, y, initial=[0.5, 1]):
-        """
-        Fit a Model to data.
+
+class ContactClusterSnapshot(ClusterSnapshot):
+    """Class for tracking the location of contact clusters at each time step"""
+    
+    def __init__(self, t, trajectory, ats, cutoff):
+        """ Initialize a ClusterSnapshot object.
 
         Parameters
         ----------
-        x : float or array
-           The independent variable: contrast values presented in the
-           experiment
-        y : float or array
-           The dependent variable
+        t: timestep
+
+        snapshot: a gsd.hoomd snapshot at some time t
+        
+        ats: the number of beads in a single molecule
+        
+        cutoff: cutoff for cluster distance metric (nm)
+        """
+        snapshot = trajectory[t]
+        self.timestep = t
+        self.binds = np.argsort(snapshot.particles.body)
+        self.pos = snapshot.particles.position[self.binds]
+        sz = np.shape(self.pos)
+        if sz[0] % ats != 0:
+            raise RuntimeError("Number of particles not divisible by number \
+                                of beads per molecules.")
+        self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+        (cc,cclabels) = self.getClusterID(self.pos,cutoff)
+        self.nclusts = cc
+        self.clusterIDs = cclabels
+        
+    def getClusterID(self,positions,cutoff):
+        """
+        Find the ID of which cluster each molecule is in
+
+        Parameters
+        ----------
+        positions: numpy array of locations of each molecule in 3D space
 
         Returns
         -------
-        fit : :class:`Fit` instance
-            A :class:`Fit` object that contains the parameters of the model.
+        clusterIDs: numpy array of the cluster index of the cluster that
+        each molecule occupies
 
         """
-        params, _ = opt.leastsq(opt_err_func, initial,
-                                args=(x, y, self.func))
-        return Fit(self, params)
+        
+        BT = BallTree(positions,metric='pyfunc',
+                                        func=conOptDistance)
+        rng = radius_neighbors_graph(BT,cutoff)
+        (nclusts,clusterIDs) = connected_components(rng,directed=False,
+                                            return_labels=True)
+        
+        return (nclusts,clusterIDs)
+        
 
 
 class Fit(object):
