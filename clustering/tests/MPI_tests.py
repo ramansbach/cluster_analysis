@@ -73,12 +73,15 @@ if rank == 0:
     print("From rank 0, length of clusterarray / # of ranks",len(clusterarray)/size)
 comm.Scatter(clusterarray,carray_local,root=0)
 
-if rank < rem: #we use all cluster snapshots, num + 1 of them
-    ncsnaps = num + 1
-else: #we use all but the last cluster snapshot, which is a dummy, num of them
-    ncsnaps = num
+#for each local cluster array, turn it into a cluster, compute the 
+#clusterIDs, pack the whole thing up as an array again, and send back to 
+#root
 
 
+
+#root unpacks each cluster array into a cluster, gets the cluster sizes
+#and checks them against assertions to make sure everything was computed'
+#correctly
 
 '''
 if rank < rem:
