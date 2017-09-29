@@ -77,7 +77,8 @@ comm.Scatter(clusterarray,carray_local,root=0)
 #clusterIDs, pack the whole thing up as an array again, and send back to 
 #root
 
-
+for i in range(ncsnaps):
+    clustSnap = cl.fromArray()
 
 #root unpacks each cluster array into a cluster, gets the cluster sizes
 #and checks them against assertions to make sure everything was computed'
