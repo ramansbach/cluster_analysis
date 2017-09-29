@@ -28,9 +28,9 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 ttotal = 8 #test on 8 snapshots
-ats = 17
+ats = 2
 molno = 8
-trajname = op.join(data_path,'mols8.gsd')
+trajname = op.join(data_path,'dummy8.gsd')
 cutoff = 1.1*1.1
 #assuming that there are at least as many trajectories as processors
 num = int(np.floor(ttotal / size))
@@ -42,22 +42,27 @@ if rank == 0:
 
     currid = 0
     for r in range(size):
-        if r < rem:
-            ts = r * (num + 1) + np.arange(num + 1)
-            tslist[currid:(len(ts)+currid)] = ts
-           
-        else: 
-            ts = r * (num + 1) - (r - rem) + np.arange(num)
-            tslist[currid:(len(ts)+currid)] = ts
-            tslist[(len(ts)+currid):(len(ts) + currid + (r-rem)+1)] = -1
-        currid += num + 1
+        if rem != 0:
+            if r < rem:
+                ts = r * (num + 1) + np.arange(num + 1)
+                tslist[currid:(len(ts)+currid)] = ts
+               
+            else: 
+                ts = r * (num + 1) - (r - rem) + np.arange(num)
+                tslist[currid:(len(ts)+currid)] = ts
+                tslist[(len(ts)+currid):(len(ts) + currid + (r-rem)+1)] = -1
+            currid += num + 1
+        else:
+            tslist = np.arange(num * size)
     print(tslist)
     clusters = [cl.ContactClusterSnapshot(t,traj,ats) for t in tslist]
     carraylen = clusters[0].getCArrayLen()
     clusterarray = np.zeros(carraylen * len(clusters))
+    cind = 0
     for cls in clusters:
         carray = cls.toArray()
-        clusterarray[0:carraylen] = carray
+        clusterarray[(cind * carraylen):(cind * carraylen + carraylen)] = carray
+        cind += 1
 else:
     tCSnap = cl.ContactClusterSnapshot(0,traj,ats)
     carraylen = tCSnap.getCArrayLen()
@@ -71,6 +76,7 @@ print("From rank {0}, length of carray_local: {1}".format(rank,len(carray_local)
 if rank == 0:
     print("From rank 0, length of clusterarray: ",len(clusterarray))
     print("From rank 0, length of clusterarray / # of ranks",len(clusterarray)/size)
+    #print("Cluster array: ",clusterarray)
 comm.Scatter(clusterarray,carray_local,root=0)
 
 #for each local cluster array, turn it into a cluster, compute the 
@@ -78,11 +84,35 @@ comm.Scatter(clusterarray,carray_local,root=0)
 #root
 
 for i in range(ncsnaps):
-    clustSnap = cl.fromArray()
+    carrayi = carray_local[carraylen * i : (carraylen * i + carraylen)]
+    #print("From rank {0}, snap {1}, array{2}".format(rank,i,carrayi))
+    if not np.isnan(carrayi[4]):
+        clustSnap = cl.fromArray(carrayi,traj,ctype='contact')
+        clustSnap.setClusterID(cutoff)
+        carray_local[carraylen * i : (carraylen * i + carraylen)] = clustSnap.toArray()
 
+comm.Barrier()
+comm.Gather(carray_local,clusterarray,root=0)
+if rank == 0:
+    print("gathered")
 #root unpacks each cluster array into a cluster, gets the cluster sizes
-#and checks them against assertions to make sure everything was computed'
+#and checks them against assertions to make sure everything was computed
 #correctly
+clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
+                    [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
+                    [8,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8]]
+if rank == 0:
+    ind = 0
+    nind = 0
+    while ind < ttotal:
+        carrayi = clusterarray[carraylen * nind : (carraylen * nind + carraylen)]
+        if not np.isnan(carrayi[4]):
+            clustSnap = cl.fromArray(carrayi,traj,ctype='contact')
+            csizes = clustSnap.idsToSizes()
+            assert (csizes == clustSizesActual[ind]).all()
+            ind += 1
+        nind +=1
+        
 
 '''
 if rank < rem:

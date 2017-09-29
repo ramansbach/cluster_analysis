@@ -168,7 +168,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         self.timestep = t
         self.ats = ats
         
-        if t != -1: #create a dummy object to help with mpi scattering
+        if t != -1: 
             snapshot = trajectory[t]
         
             binds = np.argsort(snapshot.particles.body)
@@ -178,11 +178,12 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 raise RuntimeError("Number of particles not divisible by \
                                     number of beads per molecules.")
             self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
-        else:
+        else:#create a dummy object to help with mpi scattering
             snapshot = trajectory[0]
             self.pos = snapshot.particles.position
             sz = np.shape(self.pos)
             self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+            self.pos = float('NaN') * self.pos
         self.nclusts = ats
         self.clusterIDs = range(int(sz[0] / ats))
         
@@ -261,6 +262,23 @@ class ContactClusterSnapshot(ClusterSnapshot):
         for cid in range(len(self.clusterIDs)):
             clustSizes[cid] = dcounts[self.clusterIDs[cid]]
         return clustSizes
+        
+    def massAvSize(self,csizes):
+        """
+        Given the cluster sizes list, returns the mass averaged cluster size
+        of the snapshot
+        
+        Parameters
+        ----------
+        csizes: numpy array as returned by idsToSizes
+        
+        Returns
+        -------
+        mu2: float, the mass-averaged cluster size
+        """
+        umass,counts = np.unique(csizes,return_counts=True)
+        mu2 = (umass*umass*counts).sum() / (umass*counts).sum()
+        return mu2
         
 
 

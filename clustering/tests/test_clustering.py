@@ -100,7 +100,25 @@ def test_dummy8():
         assert (clustSize == clustSizesActual[t]).all()
     
 
-   
+def test_mu2():
+    """
+    test mass-averaged cluster size instantiation
+    """
+    fname = 'dummy8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    ats = 2
+    cutoff = 1.1*1.1
+    ts = range(8)
+    mu2s = np.array([1,2.375,2.8,62/22,152/34,152/34,8,8])
+    for t in ts[1:len(ts)]:
+        clustSnap = cl.ContactClusterSnapshot(t,traj,ats)
+        clustSnap.setClusterID(cutoff)
+        clustSize = clustSnap.idsToSizes()
+        mu2 = clustSnap.massAvSize(clustSize)
+        
+        npt.assert_almost_equal(mu2,mu2s[t],10)
+        
+        
 if __name__ == "__main__":
-    test_dummy8()
+    test_mu2()
 
