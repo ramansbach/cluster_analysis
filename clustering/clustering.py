@@ -12,7 +12,7 @@ from scipy.sparse.csgraph import connected_components
 from .due import due, Doi
 from mpi4py import MPI
 
-__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","SnapSystem", "transform_data","conOptDistance","getContactClusterID","fromArray"]
+__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","SnapSystem", "transform_data","conOptDistance","getContactClusterID"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -23,31 +23,7 @@ due.cite(Doi("10.1167/13.9.30"),
          tags=["data-analysis","clustering"],
          path='clustering')
 
-def fromArray(carray,trajectory,ctype='contact'):
-    """
-    Function that takes a numpy array as input and outputs a cluster with
-    the given data
-    
-    Parameters
-    ----------
-    carray: numpy array
-    
-    Returns
-    -------
-    C: cluster of chosen type
-    """
-    if ctype == 'contact':
-        t = int(carray[0])
-        ats = int(carray[2])
-        molno = int(carray[3])
-        C = ContactClusterSnapshot(t,trajectory,ats)
-        C.nclusts = carray[1]
-        pend = 4 + 3 * ats * molno
-        C.pos = np.reshape(carray[4:pend],[molno,3*ats])
-        C.clusterIDs = carray[pend:len(carray)]
-    else:
-        raise NotImplementedError("Incorrect cluster type")
-    return C
+
     
 def transform_data(data):
     """
@@ -214,7 +190,7 @@ class SnapSystem(object):
                 for ctype in cldict.keys():
                     if ctype == 'contact':
                         clusters = \
-                        [ContactClusterSnapshot(t,traj,ats) for t in tslist]
+                        [ContactClusterSnapshot(t,traj,ats,molno) for t in tslist]
                     else:
                         raise NotImplementedError("Unknown cluster type")
                     self.clsnaps[ctype] = clusters
@@ -223,7 +199,7 @@ class SnapSystem(object):
                 if ctype == 'contact':
                    
                     clusters = \
-                    [ContactClusterSnapshot(t,traj,ats) for t in range(ttotal)]
+                    [ContactClusterSnapshot(t,traj,ats,molno) for t in range(ttotal)]
                 else:
                     raise NotImplementedError("Unknown cluster type")
                 self.clsnaps[ctype] = clusters
@@ -280,7 +256,7 @@ class SnapSystem(object):
                 cind += 1
         else:
             if ctype == 'contact':
-                tCSnap = ContactClusterSnapshot(0,traj,ats)
+                tCSnap = ContactClusterSnapshot(0,traj,ats,molno)
             else:
                 tCSnap = ClusterSnapshot(0,traj,ats)
             carraylen = tCSnap.getCArrayLen()
@@ -300,7 +276,7 @@ class SnapSystem(object):
             carrayi = carray_local[carraylen * i : (carraylen * i + carraylen)]
             #print("From rank {0}, snap {1}, array{2}".format(rank,i,carrayi))
             if not np.isnan(carrayi[4]):
-                clustSnap = fromArray(carrayi,traj,ctype=ctype)
+                clustSnap = ContactClusterSnapshot(0,carrayi,ats,molno)
                 clustSnap.setClusterID(cutoff)
                 carray_local[carraylen * i : (carraylen * i + carraylen)]\
                 = clustSnap.toArray()
@@ -316,7 +292,7 @@ class SnapSystem(object):
                 carrayi = clusterarray[carraylen * nind : (carraylen * nind + carraylen)]
 
                 if not np.isnan(carrayi[4]):
-                    clustSnap = fromArray(carrayi,traj,ctype='contact')
+                    clustSnap = ContactClusterSnapshot(0,carrayi,ats,molno)
                     self.clsnaps[ctype][nind].clusterIDs = clustSnap.clusterIDs
                     #print("current pos: ",clustSnap.pos[0])
                     #print("current csizes: ",clustSnap.idsToSizes())
@@ -472,45 +448,62 @@ class ClusterSnapshot(object):
 
 class ContactClusterSnapshot(ClusterSnapshot):
     """Class for tracking the location of contact clusters at each time step"""
-    
-    def __init__(self, t, trajectory, ats):
+   
+    def __init__(self, t, trajectory, ats, molno):
         """ Initialize a ClusterSnapshot object.
 
         Parameters
         ----------
         t: timestep
 
-        trajectory: gsd.hoomd trajectory
+        trajectory: gsd.hoomd trajectory or numpy array 
+            numpy array is of size 4 + 3 * ats * molno 
+            (ats is different for optical and aligned clusters)
         
         ats: the number of beads in a single molecule
+        molno: the number of molecules in the system
         
         Raises
         ------
         RuntimeError
             if the number of particles does not divide evenly up into molecules
         
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
         """
         self.timestep = t
         self.ats = ats
-        
-        if t != -1: 
-            snapshot = trajectory[t]
-        
-            binds = np.argsort(snapshot.particles.body)
-            self.pos = snapshot.particles.position[binds]
-            sz = np.shape(self.pos)
-            if sz[0] % ats != 0:
-                raise RuntimeError("Number of particles not divisible by \
-                                    number of beads per molecules.")
-            self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
-        else:#create a dummy object to help with mpi scattering
-            snapshot = trajectory[0]
-            self.pos = snapshot.particles.position
-            sz = np.shape(self.pos)
-            self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
-            self.pos = float('NaN') * self.pos
-        self.nclusts = ats
-        self.clusterIDs = range(int(sz[0] / ats))
+        if type(trajectory) is np.ndarray:
+            carray = trajectory
+            self.timestep = int(carray[0])
+            self.ats = int(carray[2])
+           
+            self.nclusts = carray[1]
+            pend = 4 + 3 * ats * molno
+            self.pos = np.reshape(carray[4:pend],[molno,3*ats])
+            self.clusterIDs = carray[pend:len(carray)]
+        else:
+            if t != -1: 
+                snapshot = trajectory[t]
+            
+                binds = np.argsort(snapshot.particles.body)
+                self.pos = snapshot.particles.position[binds]
+                sz = np.shape(self.pos)
+                if sz[0] % ats != 0:
+                    raise RuntimeError("Number of particles not divisible by \
+                                        number of beads per molecules.")
+                self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+            else:#create a dummy object to help with mpi scattering
+                snapshot = trajectory[0]
+                self.pos = snapshot.particles.position
+                sz = np.shape(self.pos)
+                self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+                self.pos = float('NaN') * self.pos
+            self.nclusts = ats
+            self.clusterIDs = range(int(sz[0] / ats))
         
     def getCArrayLen(self):
         """
@@ -555,6 +548,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         clen = molno
         carray[pend:(pend + clen)] = self.clusterIDs
         return carray
+    
         
     def setClusterID(self,cutoff):
         """

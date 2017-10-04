@@ -55,7 +55,7 @@ if rank == 0:
         else:
             tslist = np.arange(num * size)
     print(tslist)
-    clusters = [cl.ContactClusterSnapshot(t,traj,ats) for t in tslist]
+    clusters = [cl.ContactClusterSnapshot(t,traj,ats,molno) for t in tslist]
     carraylen = clusters[0].getCArrayLen()
     clusterarray = np.zeros(carraylen * len(clusters))
     cind = 0
@@ -64,7 +64,7 @@ if rank == 0:
         clusterarray[(cind * carraylen):(cind * carraylen + carraylen)] = carray
         cind += 1
 else:
-    tCSnap = cl.ContactClusterSnapshot(0,traj,ats)
+    tCSnap = cl.ContactClusterSnapshot(0,traj,ats,molno)
     carraylen = tCSnap.getCArrayLen()
     clusterarray = None
 if rem == 0:
@@ -87,7 +87,7 @@ for i in range(ncsnaps):
     carrayi = carray_local[carraylen * i : (carraylen * i + carraylen)]
     #print("From rank {0}, snap {1}, array{2}".format(rank,i,carrayi))
     if not np.isnan(carrayi[4]):
-        clustSnap = cl.fromArray(carrayi,traj,ctype='contact')
+        clustSnap = cl.ContactClusterSnapshot(0,carrayi,ats,molno)
         clustSnap.setClusterID(cutoff)
         carray_local[carraylen * i : (carraylen * i + carraylen)] = clustSnap.toArray()
 
@@ -107,7 +107,7 @@ if rank == 0:
     while ind < ttotal:
         carrayi = clusterarray[carraylen * nind : (carraylen * nind + carraylen)]
         if not np.isnan(carrayi[4]):
-            clustSnap = cl.fromArray(carrayi,traj,ctype='contact')
+            clustSnap = cl.ContactClusterSnapshot(0,carrayi,ats,molno)
             csizes = clustSnap.idsToSizes()
 
             assert (csizes == clustSizesActual[ind]).all()

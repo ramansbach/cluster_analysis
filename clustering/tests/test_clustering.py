@@ -36,9 +36,10 @@ def test_ContactClusterSnapshot_init():
     traj = gsd.hoomd.open(op.join(data_path, fname))
     
     ats = 17
+    molno = 8
     cutoff= 1.1*1.1
     t = 97
-    clustSnap = cl.ContactClusterSnapshot(t,traj,ats)
+    clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
     clustSnap.setClusterID(cutoff)
     assert clustSnap.timestep == t
     sz = np.shape(traj[t].particles.position)
@@ -75,11 +76,12 @@ def test_clusterPackAndUnpack():
     ats = 17
     
     cutoff= 1.1*1.1
+    molno = 8
     t = 97
-    clustSnap = cl.ContactClusterSnapshot(t,traj,ats)
+    clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
     clustSnap.setClusterID(cutoff)
     carray = clustSnap.toArray()
-    clustSnap2 = cl.fromArray(carray,traj)
+    clustSnap2 = cl.ContactClusterSnapshot(0,carray,ats,molno)
     assert clustSnap.timestep == clustSnap2.timestep
     assert clustSnap.ats == clustSnap2.ats
     assert clustSnap.nclusts == clustSnap2.nclusts
@@ -95,13 +97,14 @@ def test_dummy8():
     fname = 'dummy8.gsd'
     traj = gsd.hoomd.open(op.join(data_path,fname))
     ats = 2
+    molno = 8
     cutoff = 1.1*1.1
     ts = range(8)
     clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
                         [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
                         [8,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8]]
     for t in ts:
-        clustSnap = cl.ContactClusterSnapshot(t,traj,ats)
+        clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
         clustSnap.setClusterID(cutoff)
         clustSize = clustSnap.idsToSizes()
         assert (clustSize == clustSizesActual[t]).all()
@@ -114,11 +117,12 @@ def test_mu2():
     fname = 'dummy8.gsd'
     traj = gsd.hoomd.open(op.join(data_path,fname))
     ats = 2
+    molno = 8
     cutoff = 1.1*1.1
     ts = range(8)
     mu2s = np.array([1,2.375,2.8,62/22,152/34,152/34,8,8])
     for t in ts[1:len(ts)]:
-        clustSnap = cl.ContactClusterSnapshot(t,traj,ats)
+        clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
         clustSnap.setClusterID(cutoff)
         clustSize = clustSnap.idsToSizes()
         mu2 = clustSnap.massAvSize(clustSize)
