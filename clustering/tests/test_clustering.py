@@ -8,6 +8,12 @@ import sys
 
 data_path = op.join(cl.__path__[0], 'data')
 
+def test_MPI():
+    """
+    Dummy function reminder to run the MPI tests as well
+    """
+    print("Please run mpiexec -n 5 python MPI_tests.py. \
+    Currently this hasn't yet been automated.")
 
 def test_ClusterSnapshot_init():
     """
@@ -79,7 +85,8 @@ def test_clusterPackAndUnpack():
     assert clustSnap.nclusts == clustSnap2.nclusts
     assert (clustSnap.pos == clustSnap2.pos).all()
     assert (clustSnap.clusterIDs == clustSnap2.clusterIDs).all()
-    
+ 
+
 def test_dummy8():
     """
     Makes sure that contact clusters return what is expected, employing
@@ -118,7 +125,86 @@ def test_mu2():
         
         npt.assert_almost_equal(mu2,mu2s[t],10)
         
-        
-if __name__ == "__main__":
-    test_mu2()
+def test_get_clusters_serial():
+    """
+    test the serial implementation of setting all the clusters correctly
+    """
+    fname = 'dummy8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    ats = 2
+    cutoff = 1.1*1.1
+    molno = 8
+    cldict = {'contact':cutoff}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact')
+    clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
+                    [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
+                    [8,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8]]
+    cid = 0
+    clsnaps = syst.clsnaps['contact']
+    for clsnap in clsnaps:
+        csizes = clsnap.idsToSizes()
+        assert (clustSizesActual[cid] == csizes).all()
+        cid+=1
 
+def test_mu2vtime():
+    """
+    test the (serial) version of getting the mass-averaged cluster size v time
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = 17
+    cutoff= 1.1*1.1
+    molno = 8
+    cldict = {'contact':cutoff}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact')
+    mu2vtime = syst.getMassAvVsTime('contact')
+    assert np.shape(mu2vtime)[1] == len(traj)
+    assert not (np.isnan(mu2vtime)).all()
+
+def test_writeCID():
+    """
+    test writing out the clusterIDs
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = 17
+    cutoff= 1.1*1.1
+    molno = 8
+    cldict = {'contact':cutoff}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact')
+    syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
+    
+def test_writeSizes():
+    """
+    test writing out the clusterIDs
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = 17
+    cutoff= 1.1*1.1
+    molno = 8
+    cldict = {'contact':cutoff}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact')
+    syst.writeSizes('contact',op.join(data_path,'mols8sizes.dat'))
+    
+if __name__ == "__main__":
+    test_ClusterSnapshot_init()
+    test_MPI()
+    test_get_clusters_serial()
+    test_writeCID()
+    test_ContactClusterSnapshot_init()
+    test_conOptDist()
+    test_clusterPackAndUnpack()
+    test_dummy8()
+    test_mu2()
+    test_get_clusters_serial()
+    test_mu2vtime()
+    test_writeCID()
+    test_writeSizes()

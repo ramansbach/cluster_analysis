@@ -109,43 +109,111 @@ if rank == 0:
         if not np.isnan(carrayi[4]):
             clustSnap = cl.fromArray(carrayi,traj,ctype='contact')
             csizes = clustSnap.idsToSizes()
+
             assert (csizes == clustSizesActual[ind]).all()
             ind += 1
         nind +=1
-        
 
-'''
-if rank < rem:
-    ts = rank * (num + 1) + np.arange(num + 1)
-else:
-    ts = rank * (num + 1) - (rank - rem) + np.arange(num)
+def test_system_init_MPI():
+    """
+    Test the initialization of the system using MPI
+    """
+    cldict = {'contact':1.1*1.1}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    assert syst.mpi
+    assert syst.ats == ats
+    assert syst.molno == molno
+    assert syst.cldict == cldict
 
-local_clusterIDs = np.zeros(len(ts)*ats)
+def test_system_set_CIDs_MPI():
+    """
+    Test setting the cluster IDs with MPI
+    """
+    cldict = {'contact':1.1*1.1}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_mpi('contact')
+    clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
+                    [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
+                    [8,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8]]
+    if rank == 0:
+        ind = 0
+        nind = 0
+        print(len(syst.clsnaps['contact']))
+        tclustSnap = syst.clsnaps['contact'][7]
+        print(tclustSnap.pos[0])
+        print(tclustSnap.idsToSizes())
+        while ind < ttotal:
+            clustSnap = syst.clsnaps['contact'][nind]
+            
+            if not np.isnan(clustSnap.pos[0][0]):
+                print("ind is: ",ind)
+                print("nind is: ",nind)
+                csizes = clustSnap.idsToSizes()
+                print("csizes is: ",csizes)
+                print("actual is: ",clustSizesActual[ind])
+                assert (csizes == clustSizesActual[ind]).all()
+                ind += 1
+            nind +=1
 
-
-for t in ts:
-    snap = traj[int(t)]
-    pos = snap.particles.position
-    (nclust,clusterIDs) = cl.getContactClusterID(pos,cutoff)
-
-if rank == 0:
-    clusterIDGather = np.zeros(ttotal*ats)
-    print("Size of Gather Array: ",len(clusterIDGather))
-else:
-    clusterIDGather = None
-sendcounts = np.arange(size)
-displacements = np.arange(size)
-for i in range(size):
-    if i < rem:
-        sendcounts[i] = ats * ( rank * (num+1) + num + 1)
-        displacements[i] = rank * (num + 1)
-    else:
-        sendcounts[i] = ats * (rank * (num+1) - (rank - rem) + num) 
-        displacements[i] = rank * (num + 1) - (rank - rem)
-
-print("From rank {0}, length of cIDs: {1}\n".format(rank,len(clusterIDs)))
-print("From rank {0}, sendcounts: {1}\n".format(rank,sendcounts))
-print("From rank {0}, displacements: {1}\n".format(rank,displacements))
+def test_writeout():
+    """
+    Test the MPI writing out of cluster stuff
+    """
+    cldict = {'contact':1.1*1.1}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_mpi('contact')
+    clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
+                    [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
+                    [8,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8]]
+    if rank == 0:
+        syst.writeCIDs('contact','dummyCIDs.dat')
+        syst.writeSizes('contact','dummysizes.dat')
+        try:
+            
+            fCIDs = open('dummyCIDs.dat')
+        except IOError:
+            print("ERROR! cluster index file was not written.")
+            return False
+        try:
+            fsizes = open('dummysizes.dat')
+        except IOError:
+            print("ERROR! cluster sizes file was not written.")
+            return False
+        lind = 0
+        for line in fsizes:
+            try:
+            
+                assert (clustSizesActual[lind]==[int(n) for n in line.split()])
+                lind += 1
+            except AssertionError:
+                print("{0} is not equal to {1}.".format(clustSizesActual[lind],[int(n) for n in line.split()]))
+                
+                return False
+        fCIDs.close()
+        fsizes.close()
+        return True
     
-#comm.Gatherv(clusterIDs,[clusterIDGather,sendcounts,displacements,MPI.DOUBLE])
-    '''
+#poor man's pytest
+if __name__ == "__main__":
+    try:
+        test_system_init_MPI()
+        if rank == 0:
+            print("System initialized correctly.")
+    except AssertionError:
+        if rank == 0:
+            print("Failure of system initialization with MPI.")
+        
+    try:
+        test_system_set_CIDs_MPI()
+        if rank == 0:
+            print("System correctly set cluster indices.")
+    except AssertionError:
+        if rank == 0:
+            print("System failed at setting cluster indices.")
+    
+    writebool = test_writeout()
+    if rank == 0:
+        if writebool:
+            print("System passed writing test.")
+        else:
+            print("ERROR! Unknown error in writing test.")
