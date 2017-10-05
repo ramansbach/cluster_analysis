@@ -9,12 +9,12 @@ from sklearn.neighbors import radius_neighbors_graph
 from scipy.spatial.distance import cdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
-from .due import due, Doi
+#from .due import due, Doi
 from mpi4py import MPI
 
-__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","SnapSystem", "transform_data","conOptDistance","getContactClusterID"]
+__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","SnapSystem","conOptDistance","alignedDistance","getContactClusterID"]
 
-
+'''
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
 # be cited. This does nothing, unless the user has duecredit installed,
 # And calls this with duecredit (as in `python -m duecredit script.py`):
@@ -22,33 +22,10 @@ due.cite(Doi("10.1167/13.9.30"),
          description="Simple data analysis for clustering application",
          tags=["data-analysis","clustering"],
          path='clustering')
-
+'''
 
     
-def transform_data(data):
-    """
-    Function that takes experimental data and gives us the
-    dependent/independent variables for analysis.
 
-    Parameters
-    ----------
-    data : Pandas DataFrame or string.
-        If this is a DataFrame, it should have the columns `contrast1` and
-        `answer` from which the dependent and independent variables will be
-        extracted. If this is a string, it should be the full path to a csv
-        file that contains data that can be read into a DataFrame with this
-        specification.
-
-    Returns
-    -------
-    x : array
-        The unique contrast differences.
-    y : array
-        The proportion of '2' answers in each contrast difference
-    n : array
-        The number of trials in each x,y condition
-    """
-    
 def getContactClusterID(positions,cutoff):
         """
         Find the ID of which cluster each molecule is in
@@ -84,6 +61,9 @@ def conOptDistance(x,y):
         The 1D array of size 3*ats representing the first molecule
     y : array
         The 1D array of size 3*ats representing the second molecule
+        
+    Returns
+    -------
     r : float
         The distance between x and y computed as the minimum distance
         between any two beads in the molecules
@@ -96,6 +76,70 @@ def conOptDistance(x,y):
     ya = np.reshape(y,[ats,3])
     #return np.min(euclidean_distances(xa,ya,squared=True))    
     return np.min(cdist(xa,ya,metric='sqeuclidean'))
+    
+def alignedDistance(x,y):
+    """
+    Function that computes the distances between molecules for aligned clusters
+    
+    Parameters:
+    -----------
+    x : array
+        The 1D array of size 3*ats representing the first molecule
+    y : array
+        The 1D array of size 3*ats representing the second molecule
+        
+    Returns
+    -------
+    r : float
+        The distance between x and y computed as the minimum distance
+        between any two beads in the molecules
+        
+    Raises
+    ------
+    RuntimeError
+        if the array does not have a number of entries divisible by three
+        because it's supposed to be a flattened array of positions
+        
+    Notes
+    -----
+    Compute the minimum distance of each COM to another COM
+    Take the three minimum distances of this list
+    Return the maximum of these three
+    
+    """
+    if len(x) % 3 != 0:
+        raise RuntimeError("3D array has a number of entries not divisible \
+                            by 3.")
+    ats = int(len(x)/3)
+    xa = np.reshape(x,[ats,3])
+    ya = np.reshape(y,[ats,3])
+    distmat = cdist(xa,ya,metric='sqeuclidean')
+    distdict = dict()
+    for i in range(ats):
+        for j in range(ats):
+            distdict[distmat[i,j]] = (i,j)
+    skeys = sorted(distdict.iterkeys())
+    min1 = skeys[0]
+    i1 = distdict[min1][0]
+    j1 = distdict[min1][1]
+    i2 = i1
+    j2 = j1
+    ind2 = 1
+    while (i2 == i1) or (j2 == j1):
+        min2 = skeys[ind2]
+        i2 = distdict[min2][0]
+        j2 = distdict[min2][1]
+        ind2 += 1
+    ind3 = ind2
+    min3 = skeys[ind3]
+    i3 = distdict[min3][0]
+    j3 = distdict[min3][0]
+    while (i3 == i1) or (i3 == i2) or (j3 == j1) or (j3 == j2):
+        min3 = skeys[ind3]
+        i3 = distdict[min3][0]
+        j3 = distdict[min3][1]
+        ind3 += 1
+    return min3
             
 class SnapSystem(object):
     """Class for running the full suite of analysis software """

@@ -2,11 +2,13 @@ from __future__ import absolute_import, division, print_function
 import os.path as op
 import numpy as np
 import numpy.testing as npt
-import clustering as cl
+
 import gsd.hoomd
 import sys
-
-data_path = op.join(cl.__path__[0], 'data')
+#import clustering as cl
+import imp
+cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
+#data_path = op.join(cl.__path__[0], 'data')
 
 def test_MPI():
     """
@@ -64,6 +66,7 @@ def test_conOptDist():
     r2 = cl.conOptDistance(molA2,molB2)
     npt.assert_almost_equal(r1,4.0,decimal=10)
     npt.assert_almost_equal(r2,1.0,decimal=10)
+    
     
 def test_clusterPackAndUnpack():
     """
@@ -198,7 +201,19 @@ def test_writeSizes():
     syst.get_clusters_serial('contact')
     syst.writeSizes('contact',op.join(data_path,'mols8sizes.dat'))
     
+def test_alignedDistance():
+    """
+    test that the aligned distance metric works correctly on several cases
+    """
+    apos1 = np.array([-1.,0.,0.,-1.,-0.5,0.,
+                      -1.,-1.,0.,0.,-1.,0.,0.,-0.5,0.,0.,0.,0.])
+    apos2 = np.array([1.5,0.,0.,1.5,-0.5,0.,
+                      1.5,-1.,0.,0.5,-1.,0.,0.5,-0.5,0.,0.5,0.,0.])
+    d0 = cl.alignedDistance(apos1,apos2)
+    npt.assert_almost_equal(d0,0.5,10)
+    
 if __name__ == "__main__":
+    '''
     test_ClusterSnapshot_init()
     test_MPI()
     test_get_clusters_serial()
@@ -212,3 +227,5 @@ if __name__ == "__main__":
     test_mu2vtime()
     test_writeCID()
     test_writeSizes()
+    '''
+    test_alignedDistance()
