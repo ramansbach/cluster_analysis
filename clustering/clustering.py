@@ -6,18 +6,20 @@ import sklearn
 import scipy.optimize as opt
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
+from scipy import weave
 from scipy.spatial.distance import cdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
 #from .due import due, Doi
 from mpi4py import MPI
 
-__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","SnapSystem","conOptDistance","alignedDistance","getContactClusterID"]
+__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","OpticalClusterSnapshot","AlignedClusterSnapshot","SnapSystem","conOptDistance","conOptDistanceC","alignedDistance","alignedDistanceC"]
 
-'''
+
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
 # be cited. This does nothing, unless the user has duecredit installed,
 # And calls this with duecredit (as in `python -m duecredit script.py`):
+'''
 due.cite(Doi("10.1167/13.9.30"),
          description="Simple data analysis for clustering application",
          tags=["data-analysis","clustering"],
@@ -26,29 +28,7 @@ due.cite(Doi("10.1167/13.9.30"),
 
     
 
-def getContactClusterID(positions,cutoff):
-        """
-        Find the ID of which cluster each molecule is in
 
-        Parameters
-        ----------
-        cutoff: the squared distance molecules have to be within to be
-        part of the same cluster
-
-        Returns
-        -------
-        clusterIDs: numpy array of the cluster index of the cluster that
-        each molecule occupies
-
-        """
-        
-        BT = BallTree(positions,metric='pyfunc',
-                                        func=conOptDistance)
-        rng = radius_neighbors_graph(BT,cutoff)
-        (nclusts,clusterIDs) = connected_components(rng,directed=False,
-                                            return_labels=True)
-        
-        return (nclusts,clusterIDs)
         
 def conOptDistance(x,y):
     """
@@ -68,7 +48,7 @@ def conOptDistance(x,y):
         The distance between x and y computed as the minimum distance
         between any two beads in the molecules
     """
-    if len(x) % 3 != 0:
+    if len(x) % 3 != 0 or len(y) % 3 != 0:
         raise RuntimeError("3D array has a number of entries not divisible \
                             by 3.")
     ats = len(x)/3
@@ -76,6 +56,61 @@ def conOptDistance(x,y):
     ya = np.reshape(y,[ats,3])
     #return np.min(euclidean_distances(xa,ya,squared=True))    
     return np.min(cdist(xa,ya,metric='sqeuclidean'))
+
+def conOptDistanceC(x,y):
+    """
+        Function that computes the distance between molecules for contact
+    or optical clusters
+    
+    Parameters:
+    -----------
+    x : array
+        The 1D array of size 3*ats representing the first molecule
+    y : array
+        The 1D array of size 3*ats representing the second molecule
+        
+    Returns
+    -------
+    r : float
+        The distance between x and y computed as the minimum distance
+        between any two beads in the molecules
+        
+    Notes
+    -----
+    Uses scipy.weave to incorporate a little bit of C code to see if that
+    will speed things up
+    """
+    if len(x) % 3 != 0 or len(y) % 3 != 0:
+        raise RuntimeError("3D array has a number of entries not divisible \
+                            by 3.")
+   
+    #xa = np.reshape(x,[ats,3])
+    #ya = np.reshape(y,[ats,3])
+    mind = 10000.0
+    support = '#include <math.h>'
+    
+    code = """
+    int i,j;
+    return_val = 0;
+    double d;
+    for (i = 0; i < Nx[0]/3; i++) {
+       for (j = 0; j < Nx[0]/3; j++) {
+           d = (x[3*i] - y[3*j]) * (x[3*i] - y[3*j])
+               + (x[3*i + 1] - y[3*j + 1]) * (x[3*i + 1] - y[3*j + 1])
+               + (x[3*i + 2] - y[3*j + 2]) * (x[3*i + 2] - y[3*j + 2]);
+           if (d < mind){
+               mind = d;            
+           }
+       }     
+    }
+    return_val = mind;
+	
+			"""
+    mind = weave.inline(code,['x', 'y', 'mind'],
+                        support_code = support, libraries = ['m'])
+    #return np.min(euclidean_distances(xa,ya,squared=True))    
+    return mind
+    
     
 def alignedDistance(x,y):
     """
@@ -107,40 +142,130 @@ def alignedDistance(x,y):
     Return the maximum of these three
     
     """
-    if len(x) % 3 != 0:
+    if len(x) % 3 != 0 or len(y) % 3 != 0:
         raise RuntimeError("3D array has a number of entries not divisible \
                             by 3.")
     ats = int(len(x)/3)
     xa = np.reshape(x,[ats,3])
     ya = np.reshape(y,[ats,3])
     distmat = cdist(xa,ya,metric='sqeuclidean')
-    distdict = dict()
+    
+    dists = np.zeros([ats * ats, 3])
+    dind = 0
     for i in range(ats):
         for j in range(ats):
-            distdict[distmat[i,j]] = (i,j)
-    skeys = sorted(distdict.iterkeys())
-    min1 = skeys[0]
-    i1 = distdict[min1][0]
-    j1 = distdict[min1][1]
+            dists[dind,0] = distmat[i,j]
+            dists[dind,1] = i
+            dists[dind,2] = j
+            dind += 1
+    sdists = dists[dists[:,0].argsort()]
+    
+    i1 = sdists[0,1]
+    j1 = sdists[0,2]
     i2 = i1
     j2 = j1
     ind2 = 1
     while (i2 == i1) or (j2 == j1):
-        min2 = skeys[ind2]
-        i2 = distdict[min2][0]
-        j2 = distdict[min2][1]
+        
+        i2 = sdists[ind2,1]
+        j2 = sdists[ind2,2]
         ind2 += 1
     ind3 = ind2
-    min3 = skeys[ind3]
-    i3 = distdict[min3][0]
-    j3 = distdict[min3][0]
+    
+    i3 = sdists[ind3,1]
+    j3 = sdists[ind3,2]
     while (i3 == i1) or (i3 == i2) or (j3 == j1) or (j3 == j2):
-        min3 = skeys[ind3]
-        i3 = distdict[min3][0]
-        j3 = distdict[min3][1]
+        
+        i3 = sdists[ind3,1]
+        j3 = sdists[ind3,2]
         ind3 += 1
-    return min3
+    return sdists[ind3-1,0]
+
+def alignedDistanceC(x,y):
+    """
+    Function that computes the distances between molecules for aligned clusters
+    
+    Parameters:
+    -----------
+    x : array
+        The 1D array of size 3*ats representing the first molecule
+    y : array
+        The 1D array of size 3*ats representing the second molecule
+        
+    Returns
+    -------
+    r : float
+        The distance between x and y computed as the minimum distance
+        between any two beads in the molecules
+        
+    Raises
+    ------
+    RuntimeError
+        if the array does not have a number of entries divisible by three
+        because it's supposed to be a flattened array of positions
+        
+    Notes
+    -----
+    Compute the minimum distance of each COM to another COM
+    Take the three minimum distances of this list
+    Return the maximum of these three
+    Use scipy.weave and C++ to speed things up
+    
+    """
+    if len(x) % 3 != 0 or len(y) % 3 != 0:
+        raise RuntimeError("3D array has a number of entries not divisible \
+                            by 3.")
+    ats = int(len(x)/3)
+    dists = np.zeros([ats * ats])
+    distsA = np.zeros([ats * ats])
+    distsB = np.zeros([ats * ats])
+
+    support = '#include <math.h>'
+    code = """
+    int i,j,dind = 0;
+    return_val = 0;
+    for (i = 0; i < ats; i++){
+        for (j = 0; j < ats; j++){
+            dists[dind] = (x[3 * i] - y[3 * j]) * (x[3 * i] - y[3 * j])
+            + (x[3 * i + 1] - y[3 * j + 1]) * (x[3 * i + 1] - y[3 * j + 1])
+            + (x[3 * i + 2] - y[3 * j + 2]) * (x[3 * i + 2] - y[3 * j + 2]);
+            distsA[dind] = i;
+            distsB[dind] = j;
+            dind++;
+        }    
+    }
+    double mind = 10000.0;
+    int mindi, mindj;
+    for (int k = 0; k < ats * ats; k++){
+        if (dists[k] < mind){
+            mind = dists[k];
+            mindi = distsA[k];
+            mindj = distsB[k];
             
+        }
+    }
+    double mind2 = 10000.0;
+    int mind2i, mind2j;
+    for (int k = 0; k < ats * ats; k++){
+        if ((dists[k] < mind2) && (distsA[k] != mindi) && (distsB[k] != mindj))
+        {
+            mind2 = dists[k];
+            mind2i = distsA[k];
+            mind2j = distsB[k];
+        }
+    }
+    double mind3 = 10000.0;
+    for (int k = 0; k < ats * ats; k++){
+        if ((dists[k] < mind3) && (distsA[k] != mindi) && (distsB[k] != mindj) 
+        && (distsA[k] != mind2i) && (distsB[k] != mind2j)){
+            mind3 = dists[k];
+        }
+    }
+    return_val = mind3;
+    """
+    mind3 = weave.inline(code,['x', 'y','dists','distsA','distsB','ats'],
+                        support_code = support, libraries = ['m'])
+    return mind3    
 class SnapSystem(object):
     """Class for running the full suite of analysis software """
     
@@ -546,7 +671,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 sz = np.shape(self.pos)
                 self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
                 self.pos = float('NaN') * self.pos
-            self.nclusts = ats
+            self.nclusts = molno
             self.clusterIDs = range(int(sz[0] / ats))
         
     def getCArrayLen(self):
@@ -608,9 +733,34 @@ class ContactClusterSnapshot(ClusterSnapshot):
         -------
         None, just sets clusterIDs
         """        
-        (nclusts,clusterIDs) = getContactClusterID(self.pos,cutoff)
+        (nclusts,clusterIDs) = \
+        self.getClusterID(self.pos,cutoff,conOptDistanceC)
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
+        
+    def getClusterID(self, positions,cutoff,func):
+        """
+        Find the ID of which cluster each molecule is in
+
+        Parameters
+        ----------
+        cutoff: the squared distance molecules have to be within to be
+        part of the same cluster
+
+        Returns
+        -------
+        clusterIDs: numpy array of the cluster index of the cluster that
+        each molecule occupies
+
+        """
+        
+        BT = BallTree(positions,metric='pyfunc',
+                                        func=func)
+        rng = radius_neighbors_graph(BT,cutoff)
+        (nclusts,clusterIDs) = connected_components(rng,directed=False,
+                                            return_labels=True)
+        
+        return (nclusts,clusterIDs)
     
     def idsToSizes(self):
         """
@@ -646,5 +796,220 @@ class ContactClusterSnapshot(ClusterSnapshot):
         return mu2
         
 
+class OpticalClusterSnapshot(ContactClusterSnapshot):
+    """Class for tracking the location of optical clusters at each time step"""
+    def getComs(self,compairs,atype,snapshot,molno):
+        """Helper function to get the COMs of a subset of beads
+        
+        Parameters
+        ----------
+        compairs:  m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        snapshot: gsd snapshot at the particular time of interest
+        molno: int
+            number of molecules in snapshot
+        
+        Returns
+        -------
+        aCOMS: nPairs x 3 numpy array
+            array of COM positions for each bead
+            
+        Raises
+        ------
+        RuntimeError 
+            if the number of beads in the aromatics isn't equal to the 
+            total number of aromatics * beads in an aromatic
+        """
+        tind = snapshot.particles.types.index(atype)
+        types = snapshot.particles.typeid
+        ats = self.ats
+        aBeads = snapshot.particles.position[np.where(types==tind)[0]]
+        pairShape = np.shape(compairs)
+        nPairs = pairShape[0]
+        aromSize = pairShape[1]
+        beadNo = np.shape(aBeads)[0]
+        if nPairs * aromSize != beadNo / molno:
+            raise RuntimeError("number of beads ({0} in {1} molecules)\
+            does not divide cleanly \
+            among aromatics ({2}) of size {3}".format(beadNo,molno,nPairs,
+                                                     aromSize))
+        aCOMs = np.zeros([nPairs * molno,3])
+        for moli in range(molno):
+            aBeadsMol = aBeads[(moli * beadNo / molno):(moli * beadNo / molno)\
+                                + beadNo / molno,:]
+            for m in range(nPairs):
+                
+                    aCOMs[moli*nPairs + m,:] = np.mean(aBeadsMol[compairs[m]],axis=0)
 
+        return aCOMs
+            
+    def __init__(self, t, trajectory, ats, molno, atype=u'LS'):
+        """ Initialize a ClusterSnapshot object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trajectory: gsd.hoomd trajectory or numpy array 
+            numpy array is of size 4 + 3 * ats * molno 
+            (ats is different for optical and aligned clusters)
+        
+        ats: the number of aromatics in a single molecule
+        molno: the number of molecules in the system
+        compairs: m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
+        An optical cluster snapshot tracks the positions of the COMs of the
+        optical clusters, rather than the positions of the separate beads,
+        as the contact cluster does
+        """
+        self.timestep = t
+        self.ats = ats
+        if type(trajectory) is np.ndarray:
+            carray = trajectory
+            self.timestep = int(carray[0])
+            self.ats = int(carray[2])
+           
+            self.nclusts = carray[1]
+            pend = 4 + 3 * ats * molno
+            self.pos = np.reshape(carray[4:pend],[molno,3*ats])
+            self.clusterIDs = carray[pend:len(carray)]
+        else:
+            if t != -1: 
+                snapshot = trajectory[t]
+                
+                
+                #self.pos = self.getComs(compairs,atype,trajectory[t],molno)
+                tind = snapshot.particles.types.index(atype)
+                types = snapshot.particles.typeid
+       
+                self.pos = \
+                snapshot.particles.position[np.where(types==tind)[0]]
+                sz = np.shape(self.pos)
+                if sz[0] % ats != 0:
+                    raise RuntimeError("Number of particles not divisible by \
+                                        number of beads per molecules.")
+                self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+            else:#create a dummy object to help with mpi scattering
+                snapshot = trajectory[0]
+                #self.pos = self.getComs(compairs,atype,snapshot,molno)
+                sz = np.shape(self.pos)
+                tind = snapshot.particles.types.index(atype)
+                types = snapshot.particles.typeid
+       
+                self.pos = \
+                snapshot.particles.position[np.where(types==tind)[0]]
+                self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+                self.pos = float('NaN') * self.pos
+            self.nclusts = molno
+            self.clusterIDs = range(int(sz[0] / ats))
+    
+class AlignedClusterSnapshot(OpticalClusterSnapshot):
+    """Class for tracking the location of aligned clusters at each time step"""
+    
+    def __init__(self, t, trajectory, ats, molno, compairs=[], atype=u'LS'):
+        """ Initialize a ClusterSnapshot object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trajectory: gsd.hoomd trajectory or numpy array 
+            numpy array is of size 4 + 3 * ats * molno 
+            (ats is different for optical and aligned clusters)
+        
+        ats: the number of aromatics in a single molecule
+        molno: the number of molecules in the system
+        compairs: m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
+        An aligned cluster snapshot just uses a different distance metric
+        from an optical cluster snapshot
+        """
+        self.timestep = t
+        self.ats = ats
+        if type(trajectory) is np.ndarray:
+            carray = trajectory
+            self.timestep = int(carray[0])
+            self.ats = int(carray[2])
+           
+            self.nclusts = carray[1]
+            pend = 4 + 3 * ats * molno
+            self.pos = np.reshape(carray[4:pend],[molno,3*ats])
+            self.clusterIDs = carray[pend:len(carray)]
+        else:
+            if t != -1: 
+                snapshot = trajectory[t]
+                
+                
+                self.pos = self.getComs(compairs,atype,trajectory[t],molno)
+                sz = np.shape(self.pos)
+                if sz[0] % ats != 0:
+                    raise RuntimeError("Number of particles not divisible by \
+                                        number of beads per molecules.")
+                self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+            else:#create a dummy object to help with mpi scattering
+                snapshot = trajectory[0]
+                self.pos = self.getComs(compairs,atype,snapshot,molno)
+                sz = np.shape(self.pos)
+                self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+                self.pos = float('NaN') * self.pos
+            self.nclusts = molno
+            self.clusterIDs = range(int(sz[0] / ats))
+            
+    def setClusterID(self,cutoff):
+        """
+        Set the cluster IDs using getClusterID
+        
+        
+        Parameters
+        ----------
+        cutoff: the squared distance molecules have to be within to be
+        part of the same cluster
+
+        Returns
+        -------
+        None, just sets clusterIDs
+        """        
+        (nclusts,clusterIDs) = \
+        self.getClusterID(self.pos,cutoff,alignedDistanceC)
+        self.nclusts = nclusts
+        self.clusterIDs = clusterIDs
+    
 
