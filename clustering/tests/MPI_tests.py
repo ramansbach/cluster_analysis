@@ -119,9 +119,10 @@ def test_system_init_MPI():
     Test the initialization of the system using MPI
     """
     cldict = {'contact':1.1*1.1}
-    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    
+    syst = cl.SnapSystem(traj,{'contact':ats},molno,cldict)
     assert syst.mpi
-    assert syst.ats == ats
+    assert syst.ats == {'contact':ats}
     assert syst.molno == molno
     assert syst.cldict == cldict
 
@@ -130,7 +131,8 @@ def test_system_set_CIDs_MPI():
     Test setting the cluster IDs with MPI
     """
     cldict = {'contact':1.1*1.1}
-    syst = cl.SnapSystem(traj,ats,molno,cldict)
+ 
+    syst = cl.SnapSystem(traj,{'contact':ats},molno,cldict)
     syst.get_clusters_mpi('contact')
     clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
                     [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
@@ -155,12 +157,51 @@ def test_system_set_CIDs_MPI():
                 ind += 1
             nind +=1
 
+def test_full_system_set_CIDs_MPI():
+    """
+    Test setting the cluster IDs with MPI for all cluster types
+    """
+    cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
+    traj = gsd.hoomd.open('/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data/dummyfull4.gsd')
+    ats = {'contact':17,'optical':12,'aligned':6}
+    molno = 4
+    compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
+    atype = 'AB'
+    syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,atype=atype)
+    syst.get_clusters_mpi('contact')
+    syst.get_clusters_mpi('optical')
+    syst.get_clusters_mpi('aligned')
+    ttotal = 6
+    cSizesActual = dict()
+    cSizesActual['contact'] = [[1,1,1,1],[2,2,2,2],[4,4,4,4],
+                          [4,4,4,4],[4,4,4,4],[4,4,4,4]]
+    cSizesActual['optical']= [[1,1,1,1],[1,1,2,2],[2,2,2,2],
+                          [2,2,2,2],[4,4,4,4],[4,4,4,4]]
+    cSizesActual['aligned'] = [[1,1,1,1],[1,1,1,1],[2,2,1,1],
+                          [2,2,2,2],[2,2,2,2],[4,4,4,4]]
+    for key in cSizesActual.keys():
+        if rank == 0:
+            ind = 0
+            nind = 0
+            
+            while ind < ttotal:
+                clustSnap = syst.clsnaps[key][nind]
+                
+                if not np.isnan(clustSnap.pos[0][0]):
+                    
+                    csizes = clustSnap.idsToSizes()
+                    
+                    assert (csizes == cSizesActual[key][ind]).all()
+                    ind += 1
+                nind +=1
+
 def test_writeout():
     """
     Test the MPI writing out of cluster stuff
     """
     cldict = {'contact':1.1*1.1}
-    syst = cl.SnapSystem(traj,ats,molno,cldict)
+   
+    syst = cl.SnapSystem(traj,{'contact':ats},molno,cldict)
     syst.get_clusters_mpi('contact')
     clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
                     [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
@@ -210,6 +251,16 @@ if __name__ == "__main__":
     except AssertionError:
         if rank == 0:
             print("System failed at setting cluster indices.")
+    
+    try: 
+        test_full_system_set_CIDs_MPI()
+        if rank == 0:
+            print("System correctly set cluster indices \
+                   for all cluster types.")
+    except AssertionError:
+        if rank == 0:
+            print("System failed at setting cluster indices \
+                       for all cluster types.")
     
     writebool = test_writeout()
     if rank == 0:

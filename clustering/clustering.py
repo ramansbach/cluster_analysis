@@ -4,6 +4,7 @@ import pandas as pd
 import gsd.hoomd
 import sklearn
 import scipy.optimize as opt
+import smoluchowski as smol
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
 from scipy import weave
@@ -269,15 +270,17 @@ def alignedDistanceC(x,y):
 class SnapSystem(object):
     """Class for running the full suite of analysis software """
     
-    def __init__(self, traj, ats, molno, cldict,ttotal=-1):
+    def __init__(self, traj, ats, molno, cldict, 
+                 compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
+                 atype=u'LS',ttotal=-1):
         """ Initialize a full system of gsd snapshots over a trajectory.
 
         Parameters
         ----------
         traj: a gsd.hoomd trajectory
         
-        ats: int
-        the number of beads in a single molecule
+        ats: dictionary
+        the number of beads in a single molecule for each cluster type
         
         molno: int
         the number of molecules in the system
@@ -285,6 +288,12 @@ class SnapSystem(object):
         cldict: dictionary
         keys are strings representing cluster types, ie contact, optical,
         aligned.  values are cutoffs
+        
+        compairs: numpy array
+            for finding COM of aromatics for aligned clusters
+        
+        atype: label
+            referring to how the aromatic beads are labeled in the trajectory
         
         ttotal: int
             the total length of the trajectory to be studied
@@ -309,6 +318,8 @@ class SnapSystem(object):
             each list is the snapshot at each timestep of the appropriate 
             type.  If mpi is True, then this list is padded with dummy clusters
             with NaN positions to make Scatter work correctly.
+        atype = label
+            referring to how aromatic beads are labeled in the trajectory
         comm: MPI communicator
         
         
@@ -334,6 +345,7 @@ class SnapSystem(object):
         self.molno = molno
         self.cldict = cldict
         self.clsnaps = {}
+        self.atype = atype
         if ttotal == -1:
             ttotal = len(traj)
         if self.mpi:
@@ -358,8 +370,20 @@ class SnapSystem(object):
                         tslist = np.arange(num * size)
                 for ctype in cldict.keys():
                     if ctype == 'contact':
-                        clusters = \
-                        [ContactClusterSnapshot(t,traj,ats,molno) for t in tslist]
+                        clusters = [ContactClusterSnapshot(t,traj,ats[ctype],
+                                                           molno) \
+                                                           for t in tslist]
+                    elif ctype == 'optical':
+                        clusters = [OpticalClusterSnapshot(t,traj,ats[ctype],
+                                                           molno,
+                                                           atype=atype) \
+                                                           for t in tslist]
+                    elif ctype == 'aligned':
+                        clusters = [AlignedClusterSnapshot(t,traj,ats[ctype],
+                                                           molno,
+                                                           compairs=compairs,
+                                                           atype=atype) \
+                                                           for t in tslist]
                     else:
                         raise NotImplementedError("Unknown cluster type")
                     self.clsnaps[ctype] = clusters
@@ -367,8 +391,17 @@ class SnapSystem(object):
             for ctype in cldict.keys():
                 if ctype == 'contact':
                    
-                    clusters = \
-                    [ContactClusterSnapshot(t,traj,ats,molno) for t in range(ttotal)]
+                    clusters = [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
+                                for t in range(ttotal)]
+                elif ctype == 'optical':
+                    clusters = [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
+                                                       atype=atype) \
+                                                       for t in range(ttotal)]
+                elif ctype == 'aligned':
+                    clusters = [AlignedClusterSnapshot(t,traj,ats[ctype],molno,
+                                                       compairs=compairs,
+                                                       atype=atype) \
+                                                       for t in range(ttotal)]
                 else:
                     raise NotImplementedError("Unknown cluster type")
                 self.clsnaps[ctype] = clusters
@@ -407,9 +440,10 @@ class SnapSystem(object):
         traj = self.trajectory
         ats = self.ats
         molno = self.molno
-        
-        if ctype not in ['contact']:
-            raise NotImplementedError('Unknown cluster type')
+        atype = self.atype
+        if ctype not in ['contact','optical','aligned']:
+            raise NotImplementedError('Unknown cluster type \
+                                      in get_clusters_mpi')
     
         cutoff = self.cldict[ctype]    
         if rank == 0:
@@ -425,7 +459,13 @@ class SnapSystem(object):
                 cind += 1
         else:
             if ctype == 'contact':
-                tCSnap = ContactClusterSnapshot(0,traj,ats,molno)
+                tCSnap = ContactClusterSnapshot(0,traj,ats[ctype],molno)
+            elif ctype == 'optical':
+                tCSnap = OpticalClusterSnapshot(0,traj,ats[ctype],molno,
+                                                atype=atype)
+            elif ctype == 'aligned':
+                tCSnap = AlignedClusterSnapshot(0,traj,ats[ctype],molno,
+                                                atype=atype)
             else:
                 tCSnap = ClusterSnapshot(0,traj,ats)
             carraylen = tCSnap.getCArrayLen()
@@ -445,7 +485,16 @@ class SnapSystem(object):
             carrayi = carray_local[carraylen * i : (carraylen * i + carraylen)]
             #print("From rank {0}, snap {1}, array{2}".format(rank,i,carrayi))
             if not np.isnan(carrayi[4]):
-                clustSnap = ContactClusterSnapshot(0,carrayi,ats,molno)
+                if ctype == 'contact':
+                    clustSnap = ContactClusterSnapshot(0,carrayi,ats[ctype],
+                                                       molno)
+                elif ctype == 'optical':
+                    clustSnap = OpticalClusterSnapshot(0,carrayi,ats[ctype],
+                                                       molno,atype=atype)
+                elif ctype == 'aligned':
+                    clustSnap = AlignedClusterSnapshot(0,carrayi,ats[ctype],
+                                                       molno,atype=atype)
+               
                 clustSnap.setClusterID(cutoff)
                 carray_local[carraylen * i : (carraylen * i + carraylen)]\
                 = clustSnap.toArray()
@@ -458,10 +507,21 @@ class SnapSystem(object):
             ind = 0
             nind = 0
             while ind < ttotal:
-                carrayi = clusterarray[carraylen * nind : (carraylen * nind + carraylen)]
+                carrayi = clusterarray[(carraylen * nind) : \
+                                       (carraylen * nind + carraylen)]
 
                 if not np.isnan(carrayi[4]):
-                    clustSnap = ContactClusterSnapshot(0,carrayi,ats,molno)
+                    if ctype == 'contact':
+                        clustSnap = ContactClusterSnapshot(0,carrayi,
+                                                           ats[ctype],molno)
+                    elif ctype == 'optical':
+                        clustSnap = OpticalClusterSnapshot(0,carrayi,
+                                                           ats[ctype],molno,
+                                                           atype=atype)
+                    elif ctype == 'aligned':
+                        clustSnap = AlignedClusterSnapshot(0,carrayi,
+                                                           ats[ctype],molno,
+                                                           atype=atype)
                     self.clsnaps[ctype][nind].clusterIDs = clustSnap.clusterIDs
                     #print("current pos: ",clustSnap.pos[0])
                     #print("current csizes: ",clustSnap.idsToSizes())
@@ -481,13 +541,15 @@ class SnapSystem(object):
         NotImplementedError
             If the cluster type isn't one that's been programmed yet.       
         """
-        if ctype not in ['contact']:
-            raise NotImplementedError("Unknown cluster type.")
+        if ctype not in self.cldict.keys():
+            raise NotImplementedError("Unknown cluster type \
+                                       in get_clusters_serial.")
         clusters = self.clsnaps[ctype]
         cutoff = self.cldict[ctype]
-        if ctype == 'contact':
-            for clustSnap in clusters:
-                clustSnap.setClusterID(cutoff)
+        
+        for clustSnap in clusters:
+            clustSnap.setClusterID(cutoff)
+        
         self.clsnaps[ctype] = clusters
     
     def getMassAvVsTime(self,ctype,tstep=1):
@@ -520,7 +582,7 @@ class SnapSystem(object):
             for clsnap in clsnaps:
                 if not np.isnan(clsnap.pos[0][0]):
                     mu2vtime[0,ind] = ind * tstep
-                    mu2vtime[1,ind] = clsnap.massAvSize(clsnap.idsToSizes())
+                    mu2vtime[1,ind] = smol.massAvSize(clsnap.idsToSizes())
                     ind += 1
         return mu2vtime
         
@@ -541,6 +603,8 @@ class SnapSystem(object):
         NotImplementedError
             If the cluster type is one that hasn't been programmed yet
         """
+        if ctype not in self.clsnaps.keys():
+            raise NotImplementedError("Unknown cluster type in writeCIDs.")
         if self.comm.Get_rank() == 0:
             print("really writing")
             fid = open(fname,'w')
@@ -569,6 +633,8 @@ class SnapSystem(object):
         NotImplementedError
             If the cluster type is one that hasn't been programmed yet
         """
+        if ctype not in self.clsnaps.keys():
+            raise NotImplementedError("Unknown cluster type in writeSizes")
         if self.comm.Get_rank() == 0:
             print("really writing sizes")
             fid = open(fname,'w')
@@ -778,22 +844,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             clustSizes[cid] = dcounts[self.clusterIDs[cid]]
         return clustSizes
         
-    def massAvSize(self,csizes):
-        """
-        Given the cluster sizes list, returns the mass averaged cluster size
-        of the snapshot
-        
-        Parameters
-        ----------
-        csizes: numpy array as returned by idsToSizes
-        
-        Returns
-        -------
-        mu2: float, the mass-averaged cluster size
-        """
-        umass,counts = np.unique(csizes,return_counts=True)
-        mu2 = (umass*umass*counts).sum() / (umass*counts).sum()
-        return mu2
+
         
 
 class OpticalClusterSnapshot(ContactClusterSnapshot):
@@ -914,12 +965,14 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
             else:#create a dummy object to help with mpi scattering
                 snapshot = trajectory[0]
                 #self.pos = self.getComs(compairs,atype,snapshot,molno)
-                sz = np.shape(self.pos)
+                
+                
                 tind = snapshot.particles.types.index(atype)
                 types = snapshot.particles.typeid
        
                 self.pos = \
                 snapshot.particles.position[np.where(types==tind)[0]]
+                sz = np.shape(self.pos)
                 self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
                 self.pos = float('NaN') * self.pos
             self.nclusts = molno
@@ -928,7 +981,9 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
 class AlignedClusterSnapshot(OpticalClusterSnapshot):
     """Class for tracking the location of aligned clusters at each time step"""
     
-    def __init__(self, t, trajectory, ats, molno, compairs=[], atype=u'LS'):
+    def __init__(self, t, trajectory, ats, molno, 
+                 compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]), 
+                 atype=u'LS'):
         """ Initialize a ClusterSnapshot object.
 
         Parameters

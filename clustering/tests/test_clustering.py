@@ -6,8 +6,10 @@ import numpy.testing as npt
 import gsd.hoomd
 import sys
 #import clustering as cl
-import imp
-cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
+from context import clustering as cl
+from context import smoluchowski as smol
+#import imp
+#cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
 #data_path = op.join(cl.__path__[0], 'data')
 data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
 def test_MPI():
@@ -57,7 +59,7 @@ def test_OpticalClusterSnapshot_init():
     
     ats = 12
     molno = 8
-    cutoff= 1.1*1.1
+    cutoff= 0.35*0.35
     t = 97
     atype = u'LS'
     #compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])
@@ -78,7 +80,7 @@ def test_AlignedClusterSnapshot_init():
     
     ats = 6
     molno = 8
-    cutoff= 1.1*1.1
+    cutoff= 0.35*0.35
     t = 97
     atype = u'LS'
     compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])
@@ -298,7 +300,7 @@ def test_mu2():
         clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
         clustSnap.setClusterID(cutoff)
         clustSize = clustSnap.idsToSizes()
-        mu2 = clustSnap.massAvSize(clustSize)
+        mu2 = smol.massAvSize(clustSize)
         
         npt.assert_almost_equal(mu2,mu2s[t],10)
         
@@ -308,7 +310,7 @@ def test_get_clusters_serial():
     """
     fname = 'dummy8.gsd'
     traj = gsd.hoomd.open(op.join(data_path,fname))
-    ats = 2
+    ats = {'contact':2}
     cutoff = 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
@@ -323,7 +325,39 @@ def test_get_clusters_serial():
         csizes = clsnap.idsToSizes()
         assert (clustSizesActual[cid] == csizes).all()
         cid+=1
-
+def test_get_clusters_serial_full():
+    """
+    test the serial implementation of setting all the cluster correctly
+    for all cluster types
+    """ 
+    fname = 'dummyfull4.gsd'
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    ats = {'contact':17,'optical':12,'aligned':6}
+    molno = 4
+    cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
+    compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
+    atype = 'AB'
+    syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,atype=atype)
+    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('optical')
+    syst.get_clusters_serial('aligned')
+    cSizesActual = dict()
+    cSizesActual['contact'] = [[1,1,1,1],[2,2,2,2],[4,4,4,4],
+                          [4,4,4,4],[4,4,4,4],[4,4,4,4]]
+    cSizesActual['optical']= [[1,1,1,1],[1,1,2,2],[2,2,2,2],
+                          [2,2,2,2],[4,4,4,4],[4,4,4,4]]
+    cSizesActual['aligned'] = [[1,1,1,1],[1,1,1,1],[2,2,1,1],
+                          [2,2,2,2],[2,2,2,2],[4,4,4,4]]
+    for key in ats.keys():
+        cid = 0
+        clsnaps = syst.clsnaps[key]
+        for clsnap in clsnaps:
+            csizes = clsnap.idsToSizes()
+            
+            assert (cSizesActual[key][cid] == csizes).all()
+            
+            cid +=1
+    
 def test_mu2vtime():
     """
     test the (serial) version of getting the mass-averaged cluster size v time
@@ -331,7 +365,7 @@ def test_mu2vtime():
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
     
-    ats = 17
+    ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
@@ -348,7 +382,7 @@ def test_writeCID():
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
     
-    ats = 17
+    ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
@@ -363,7 +397,7 @@ def test_writeSizes():
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
     
-    ats = 17
+    ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
@@ -413,8 +447,10 @@ def test_alignedDistanceC():
     npt.assert_almost_equal(d1,1.5 * 1.5, 10)
     
 if __name__ == "__main__":
+    test_get_clusters_serial_full()
+    '''
     test_dummyfull()
-    '''    
+      
     test_getComs()
     
     test_OpticalClusterSnapshot_init()
