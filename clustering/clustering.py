@@ -4,16 +4,17 @@ import pandas as pd
 import gsd.hoomd
 import sklearn
 import scipy.optimize as opt
-import smoluchowski as smol
+
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
-from scipy import weave
+import weave
 from scipy.spatial.distance import cdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
 #from .due import due, Doi
+from .smoluchowski import massAvSize
 from mpi4py import MPI
-
+from cdistances import conOptDistanceCython,alignDistancesCython
 __all__ = ["ClusterSnapshot", "ContactClusterSnapshot","OpticalClusterSnapshot","AlignedClusterSnapshot","SnapSystem","conOptDistance","conOptDistanceC","alignedDistance","alignedDistanceC"]
 
 
@@ -582,7 +583,7 @@ class SnapSystem(object):
             for clsnap in clsnaps:
                 if not np.isnan(clsnap.pos[0][0]):
                     mu2vtime[0,ind] = ind * tstep
-                    mu2vtime[1,ind] = smol.massAvSize(clsnap.idsToSizes())
+                    mu2vtime[1,ind] = massAvSize(clsnap.idsToSizes())
                     ind += 1
         return mu2vtime
         
@@ -800,7 +801,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         None, just sets clusterIDs
         """        
         (nclusts,clusterIDs) = \
-        self.getClusterID(self.pos,cutoff,conOptDistanceC)
+        self.getClusterID(self.pos,cutoff,conOptDistanceCython)
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
         
@@ -1063,7 +1064,7 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
         None, just sets clusterIDs
         """        
         (nclusts,clusterIDs) = \
-        self.getClusterID(self.pos,cutoff,alignedDistanceC)
+        self.getClusterID(self.pos,cutoff,alignDistancesCython)
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
     

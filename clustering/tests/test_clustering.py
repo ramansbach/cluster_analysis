@@ -8,6 +8,7 @@ import sys
 #import clustering as cl
 from context import clustering as cl
 from context import smoluchowski as smol
+from cdistances import conOptDistanceCython,alignDistancesCython
 #import imp
 #cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
 #data_path = op.join(cl.__path__[0], 'data')
@@ -159,9 +160,9 @@ def test_conOptDistC():
     apos2 = np.array([1.5,0.,0.,1.5,-0.5,0.,
                       1.5,-1.,0.,0.5,-1.,0.,0.5,-0.5,0.,0.5,0.,0.])
     
-    r1 = cl.conOptDistanceC(molA1,molB1)
-    r2 = cl.conOptDistanceC(molA2,molB2)
-    r3 = cl.conOptDistanceC(apos1,apos2)
+    r1 = conOptDistanceCython(molA1,molB1)
+    r2 = conOptDistanceCython(molA2,molB2)
+    r3 = conOptDistanceCython(apos1,apos2)
     npt.assert_almost_equal(r1,4.0,decimal=10)
     npt.assert_almost_equal(r2,1.0,decimal=10) 
     npt.assert_almost_equal(r3,0.25,decimal=10)
@@ -181,12 +182,14 @@ def test_pyCEquality():
     clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
     for i in range(molno):
         for j in range(molno):
-            mol1 = clustSnap.pos[i,:]
-            mol2 = clustSnap.pos[j,:]
+            mol1 = clustSnap.pos[i,:].astype(np.double)
+            mol2 = clustSnap.pos[j,:].astype(np.double)
+           
             r = cl.conOptDistance(mol1,mol2) 
-            rc = cl.conOptDistanceC(mol1,mol2)
+            rc = conOptDistanceCython(mol1,mol2)
             ar = cl.alignedDistance(mol1,mol2)
-            arc = cl.alignedDistanceC(mol1,mol2)
+            arc = alignDistancesCython(mol1,mol2)
+ 
             npt.assert_almost_equal(r,rc,5)
             npt.assert_almost_equal(ar,arc,5)
             
@@ -295,8 +298,8 @@ def test_mu2():
     molno = 8
     cutoff = 1.1*1.1
     ts = range(8)
-    mu2s = np.array([1,2.375,2.8,62/22,152/34,152/34,8,8])
-    for t in ts[1:len(ts)]:
+    mu2s = np.array([1,2,5/2,11/4,17/4,17/4,8,8])
+    for t in ts:
         clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
         clustSnap.setClusterID(cutoff)
         clustSize = clustSnap.idsToSizes()
@@ -434,7 +437,7 @@ def test_alignedDistanceC():
                       -1.,-1.,0.,0.,-1.,0.,0.,-0.5,0.,0.,0.,0.])
     apos2 = np.array([1.5,0.,0.,1.5,-0.5,0.,
                       1.5,-1.,0.,0.5,-1.,0.,0.5,-0.5,0.,0.5,0.,0.])
-    d0 = cl.alignedDistanceC(apos1,apos2)
+    d0 = alignDistancesCython(apos1,apos2)
     npt.assert_almost_equal(d0,0.25,10)
     
     apos1 = np.array([-1.,0.,0.,-1.25,-0.5,0.,
@@ -443,20 +446,21 @@ def test_alignedDistanceC():
     apos2 = np.array([0.5,0.,0.,1.5,0.,0.,
                       0.75,-0.5,0.,1.75,-0.5,0.,
                       1.,-1.,0.,2.,-1.,0.])
-    d1 = cl.alignedDistanceC(apos1,apos2)
+    d1 = alignDistancesCython(apos1,apos2)
     npt.assert_almost_equal(d1,1.5 * 1.5, 10)
     
 if __name__ == "__main__":
-    test_get_clusters_serial_full()
     '''
+    test_get_clusters_serial_full()
+    
     test_dummyfull()
       
     test_getComs()
     
     test_OpticalClusterSnapshot_init()
-    
+    '''
     test_pyCEquality()
-    
+    '''
     test_ClusterSnapshot_init()
     
     test_MPI()
@@ -464,11 +468,14 @@ if __name__ == "__main__":
     test_writeCID()
     
     test_ContactClusterSnapshot_init()
-     
-    test_conOptDist()
+    
+    test_conOptDistC()
+    
     test_clusterPackAndUnpack()
     test_dummy8()
+    
     test_mu2()
+    
     test_get_clusters_serial()
     test_mu2vtime()
     test_writeCID()

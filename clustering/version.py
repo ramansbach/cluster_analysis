@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 from os.path import join as pjoin
-
+from distutils.extension import Extension
+from Cython.Distutils import build_ext
+import numpy
+#from Cython.Build import cythonize
 # Format expected by setup.py and doc/source/conf.py: string of form "X.Y.Z"
 _version_major = 0
 _version_minor = 1
@@ -26,23 +29,16 @@ CLASSIFIERS = ["Development Status :: 3 - Alpha",
                "Topic :: Scientific/Engineering"]
 
 # Description should be a one-liner:
-description = "clustering: a template for small scientific Python projects"
+description = "clustering: data analysis for simple MD cluster data"
 # Long description will go up on the pypi page
 long_description = """
 
-Shablona
+Clustering
 ========
-Shablona is a template project for small scientific Python projects.
-
-It contains software implementations of an analysis of some simple data, but
-more importantly, it contains infrastructure for testing, documentation,
-continuous integration and deployment, which can be easily adapted
-to use in other projects.
-
-To get started using these components in your own software, please go to the
-repository README_.
-
-.. _README: https://github.com/uwescience/clustering/blob/master/README.md
+Clustering is a suite of code primarily intended for finding clusters and
+performing data analysis on them.  These clusters are physical clusters in the
+data. Also instantiated is fits to the mass-averaged cluster size versus time by
+the Smoluchowski model.
 
 License
 =======
@@ -52,24 +48,29 @@ for usage, and a DISCLAIMER OF ALL WARRANTIES.
 
 All trademarks referenced herein are property of their respective holders.
 
-Copyright (c) 2015--, Ariel Rokem, The University of Washington
-eScience Institute.
+Copyright (c) 2017--, Rachael Mansbach, University of Illinois at
+Urbana-Champaign
 """
 
 NAME = "clustering"
-MAINTAINER = "Ariel Rokem"
-MAINTAINER_EMAIL = "arokem@gmail.com"
+MAINTAINER = "Rachael Mansbach"
+MAINTAINER_EMAIL = "ramansbach@gmail.com"
 DESCRIPTION = description
 LONG_DESCRIPTION = long_description
-URL = "http://github.com/uwescience/clustering"
+URL = "http://github.com/ramansbach/clustering"
 DOWNLOAD_URL = ""
 LICENSE = "MIT"
-AUTHOR = "Ariel Rokem"
-AUTHOR_EMAIL = "arokem@gmail.com"
+AUTHOR = "Rachael Mansbach"
+AUTHOR_EMAIL = "ramansbach@gmail.com"
 PLATFORMS = "OS Independent"
 MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
 PACKAGE_DATA = {'clustering': [pjoin('data', '*')]}
-REQUIRES = ["numpy"]
+REQUIRES = ["numpy","scipy","Cython"]
+BEXT = {'build_ext': build_ext}
+CYTHONMODS=[Extension("cdistances",
+                      sources=["cdistances.pyx","conoptdistance.c",
+                               "aligndistance.c"],
+                      include_dirs=[numpy.get_include()])]

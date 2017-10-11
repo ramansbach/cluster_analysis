@@ -1,7 +1,10 @@
 import os
 from setuptools import setup, find_packages
+from distutils.extension import Extension
+from Cython.Distutils import build_ext
+from Cython.Build import cythonize
 PACKAGES = find_packages()
-
+import numpy
 # Get version and release info, which is all stored in clustering/version.py
 ver_file = os.path.join('clustering', 'version.py')
 with open(ver_file) as f:
@@ -23,7 +26,9 @@ opts = dict(name=NAME,
             packages=PACKAGES,
             package_data=PACKAGE_DATA,
             install_requires=REQUIRES,
-            requires=REQUIRES)
+            requires=REQUIRES,
+            cmdclass=BEXT,
+            ext_modules=CYTHONMODS)
 
 
 if __name__ == '__main__':
