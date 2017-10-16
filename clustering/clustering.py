@@ -4,7 +4,8 @@ import pandas as pd
 import gsd.hoomd
 import sklearn
 import scipy.optimize as opt
-
+import os
+import pdb
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
 import weave
@@ -15,7 +16,11 @@ from scipy.sparse.csgraph import connected_components
 from .smoluchowski import massAvSize
 from mpi4py import MPI
 from cdistances import conOptDistanceCython,alignDistancesCython
-__all__ = ["ClusterSnapshot", "ContactClusterSnapshot","OpticalClusterSnapshot","AlignedClusterSnapshot","SnapSystem","conOptDistance","conOptDistanceC","alignedDistance","alignedDistanceC"]
+__all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
+           "OpticalClusterSnapshot","AlignedClusterSnapshot",
+           "ContactClusterSnapshotXTC","SnapSystem",
+           "conOptDistance","conOptDistanceC","alignedDistance",
+           "alignedDistanceC"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -273,7 +278,7 @@ class SnapSystem(object):
     
     def __init__(self, traj, ats, molno, cldict, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
-                 atype=u'LS',ttotal=-1):
+                 atype=u'LS',ttotal=-1,tstart=0):
         """ Initialize a full system of gsd snapshots over a trajectory.
 
         Parameters
@@ -300,6 +305,9 @@ class SnapSystem(object):
             the total length of the trajectory to be studied
             if -1, assume it is the same as the length of the provided
             trajectory
+        tstart: int
+            timestep to start at, defaults to zero 
+            (last timestep = tstart + ttotal)
         
         Attributes
         ----------
@@ -359,16 +367,16 @@ class SnapSystem(object):
                 for r in range(size):
                     if rem != 0:
                         if r < rem:
-                            ts = r * (num + 1) + np.arange(num + 1)
+                            ts = r * (num + 1) + np.arange(num + 1) + tstart
                             tslist[currid:(len(ts)+currid)] = ts
                         else: 
-                            ts = r * (num + 1) - (r - rem) + np.arange(num)
+                            ts = r * (num + 1) - (r - rem) + np.arange(num) + tstart
                             tslist[currid:(len(ts)+currid)] = ts
                             tslist[(len(ts)+currid):(len(ts) \
                             + currid + (r-rem)+1)] = -1
                         currid += num + 1
                     else:
-                        tslist = np.arange(num * size)
+                        tslist = np.arange(num * size) + tstart
                 for ctype in cldict.keys():
                     if ctype == 'contact':
                         clusters = [ContactClusterSnapshot(t,traj,ats[ctype],
@@ -393,16 +401,16 @@ class SnapSystem(object):
                 if ctype == 'contact':
                    
                     clusters = [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
-                                for t in range(ttotal)]
+                                for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'optical':
                     clusters = [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
                                                        atype=atype) \
-                                                       for t in range(ttotal)]
+                                                       for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'aligned':
                     clusters = [AlignedClusterSnapshot(t,traj,ats[ctype],molno,
                                                        compairs=compairs,
                                                        atype=atype) \
-                                                       for t in range(ttotal)]
+                                                       for t in range(tstart,ttotal+tstart)]
                 else:
                     raise NotImplementedError("Unknown cluster type")
                 self.clsnaps[ctype] = clusters
@@ -497,8 +505,11 @@ class SnapSystem(object):
                                                        molno,atype=atype)
                
                 clustSnap.setClusterID(cutoff)
-                carray_local[carraylen * i : (carraylen * i + carraylen)]\
-                = clustSnap.toArray()
+                try:
+                    carray_local[carraylen * i : (carraylen * i + carraylen)]\
+                    = clustSnap.toArray()
+                except:
+                    pdb.set_trace()
             #print("Part 2: From rank {0}, snap {1}, array{2}".format(rank,i,carrayi))
         self.comm.Barrier()
         self.comm.Gather(carray_local,clusterarray,root=0)
@@ -607,7 +618,6 @@ class SnapSystem(object):
         if ctype not in self.clsnaps.keys():
             raise NotImplementedError("Unknown cluster type in writeCIDs.")
         if self.comm.Get_rank() == 0:
-            print("really writing")
             fid = open(fname,'w')
             clsnaps = self.clsnaps[ctype]
             for clsnap in clsnaps:
@@ -637,7 +647,6 @@ class SnapSystem(object):
         if ctype not in self.clsnaps.keys():
             raise NotImplementedError("Unknown cluster type in writeSizes")
         if self.comm.Get_rank() == 0:
-            print("really writing sizes")
             fid = open(fname,'w')
             clsnaps = self.clsnaps[ctype]
             for clsnap in clsnaps:
@@ -683,7 +692,22 @@ class ClusterSnapshot(object):
 
 
 class ContactClusterSnapshot(ClusterSnapshot):
-    """Class for tracking the location of contact clusters at each time step"""
+    """Class for tracking the location of contact clusters at each time step
+    
+    Attributes
+        ----------
+    timestep: float
+        timestep
+    ats: int
+        number of beads per molecule
+    nclusts: int
+        number of clusters in the snapshot
+    pos: numpy array [M x 3*ats]
+        locations of molecules and beads within molecules
+        each molecule is its own line and then the locations of beads
+        are flattened within that
+    clusterIDs: list [len M]    
+    """
    
     def __init__(self, t, trajectory, ats, molno):
         """ Initialize a ClusterSnapshot object.
@@ -699,6 +723,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         ats: the number of beads in a single molecule
         molno: the number of molecules in the system
         
+        
+            the index of the cluster that each molecule belongs to
         Raises
         ------
         RuntimeError
@@ -780,7 +806,10 @@ class ContactClusterSnapshot(ClusterSnapshot):
         molno = sz[0]
         carray[3] = molno
         pend = 4 + 3 * self.ats * molno
+        
+        
         carray[4:pend] = np.reshape(self.pos,[1,3*self.ats*molno])
+        
         clen = molno
         carray[pend:(pend + clen)] = self.clusterIDs
         return carray
@@ -1069,3 +1098,102 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
         self.clusterIDs = clusterIDs
     
 
+class ContactClusterSnapshotXTC(ContactClusterSnapshot):
+    """ Class for tracking contact cluster locations that are initialized
+    from an xtc/Gromacs file instead of a HOOMD one
+    
+    Attributes
+        ----------
+    timestep: float
+        timestep
+    ats: int
+        number of beads per molecule
+    nclusts: int
+        number of clusters in the snapshot
+    pos: numpy array [M x 3*ats]
+        locations of molecules and beads within molecules
+        each molecule is its own line and then the locations of beads
+        are flattened within that
+    clusterIDs: list [len M]        
+    """
+    
+    def readGro(self,fName): 
+        """ Get a list of positions from a Gromacs .gro file
+        Parameters
+        ----------
+        fname: string
+            name of .gro file
+        Returns
+        -------
+        pos: numpy vector [len 3 * molecules * ats]
+            1D list of positions in .gro file
+        """
+        with open(fName, 'r') as myF:
+            myLns = myF.read().splitlines()
+        boxL1 = float(myLns[len(myLns)-1].split()[0])
+        boxL2 = float(myLns[len(myLns)-1].split()[1])
+        boxL3 = float(myLns[len(myLns)-1].split()[2])
+        return (np.array([[float(myLns[i][20:].split()[0]),
+                           float(myLns[i][20:].split()[1]), 
+                           float(myLns[i][20:].split()[2])]\
+                           for i in range(2, len(myLns)-1)]).flatten(),
+                           np.array([boxL1,boxL2,boxL3]))
+    
+    def getPos(self, t, trj, tpr, outGro):
+        """ get positions of atoms in a trajectory 
+        Parameters
+        ----------
+        t: time
+        trj: Gromacs trajectory
+        tpr: Gromacs run file
+        outGro: name for temperory Gromacs .gro file
+    
+        Returns
+        -------
+        pos: numpy vector [len 3 * molecules * ats]
+            1D list of positions in .gro file        
+        """
+        os.system('echo 0 | trjconv -f ' + trj + ' -o ' + outGro + ' -b ' \
+                   + str(t) + ' -e ' + str(t) + ' -s ' + tpr)
+        return self.readGro(outGro)[0]
+    
+    def __init__(self, t, trj, tpr, outGro, ats, molno):
+        """ Initialize a ContactClusterSnapshotXTC object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trj: Gromacs trajectory name (xtc format)
+        
+        tpr: Gromacs run file name (tpr format)
+        
+        outGro: name for an output Gromacs .gro file
+        
+        ats: the number of beads in a single molecule
+        
+        molno: the number of molecules in the system
+        
+        
+            the index of the cluster that each molecule belongs to
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
+        """
+        self.timestep = t
+        self.ats = ats
+        self.nclusts = molno
+        self.clusterIDs = np.zeros(molno)
+        self.pos = self.getPos(t,trj,tpr,outGro)
+        if len(self.pos) != 3 * molno * ats:
+            raise RuntimeError("incorrect number of atoms or molecules")
+        #pdb.set_trace()
+        self.pos = np.reshape(self.pos,[molno,3*ats])
+        

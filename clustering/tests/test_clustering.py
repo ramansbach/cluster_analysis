@@ -51,6 +51,24 @@ def test_ContactClusterSnapshot_init():
     assert len(clustSnap.clusterIDs) == sz[0] / ats  
     assert clustSnap.nclusts == 2
     
+def test_ContactClusterSnapshotXTC_init():
+    """
+    Testing the instantiation of an XTC Cluster Snapshot
+    """
+    t = 400000
+    xtc = 'md_test.xtc'
+    tpr = 'md_dummy.tpr'
+    trj = op.join(data_path,xtc)
+    tpr = op.join(data_path,tpr)
+    outGro = 'temp.gro'
+    outGro = op.join(data_path,outGro)
+    ats = 29
+    molno = 378
+    clustSnap = cl.ContactClusterSnapshotXTC(t, trj, tpr, outGro, ats, molno)
+    assert clustSnap.timestep == t
+    pos = clustSnap.pos
+    assert np.shape(pos) == (molno,3*ats)    
+    
 def test_OpticalClusterSnapshot_init():
     """
     Testing the instantiation of an Optical Cluster Snapshot
