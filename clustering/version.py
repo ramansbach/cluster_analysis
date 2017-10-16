@@ -68,7 +68,7 @@ MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
 PACKAGE_DATA = {'clustering': [pjoin('data', '*')]}
-REQUIRES = ["numpy","scipy","Cython"]
+REQUIRES = ["numpy","scipy","Cython","scikit-learn>=0.19.0"]
 BEXT = {'build_ext': build_ext}
 CYTHONMODS=[Extension("cdistances",
                       sources=["cdistances.pyx","conoptdistance.c",
