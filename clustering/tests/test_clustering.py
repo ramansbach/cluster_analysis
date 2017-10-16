@@ -5,14 +5,14 @@ import numpy.testing as npt
 
 import gsd.hoomd
 import sys
-#import clustering as cl
-from context import clustering as cl
-from context import smoluchowski as smol
+import clustering as cl
+#from context import clustering as cl
+#from context import smoluchowski as smol
 from cdistances import conOptDistanceCython,alignDistancesCython
 #import imp
 #cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
-#data_path = op.join(cl.__path__[0], 'data')
-data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
+data_path = op.join(cl.__path__[0], 'data')
+#data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
 def test_MPI():
     """
     Dummy function reminder to run the MPI tests as well
@@ -321,7 +321,7 @@ def test_mu2():
         clustSnap = cl.ContactClusterSnapshot(t,traj,ats,molno)
         clustSnap.setClusterID(cutoff)
         clustSize = clustSnap.idsToSizes()
-        mu2 = smol.massAvSize(clustSize)
+        mu2 = cl.massAvSize(clustSize)
         
         npt.assert_almost_equal(mu2,mu2s[t],10)
         

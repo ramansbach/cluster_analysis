@@ -6,12 +6,12 @@ import scipy.constants as sconst
 import gsd.hoomd
 import sys
 import pdb
-#import clustering as cl
-from context import clustering as cl
-from context import smoluchowski as smol
+import clustering as cl
+#from context import clustering as cl
+#from context import smoluchowski as smol
 
-#data_path = op.join(cl.__path__[0], 'data')
-data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
+data_path = op.join(cl.__path__[0], 'data')
+#data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
 
 def test_getSizesFromFile():
     """test reading sizes out of a written file"""
