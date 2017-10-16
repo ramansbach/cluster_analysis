@@ -8,7 +8,6 @@ import os
 import pdb
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
-import weave
 from scipy.spatial.distance import cdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
