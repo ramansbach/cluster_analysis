@@ -595,8 +595,8 @@ class SnapSystem(object):
                     mu2vtime[0,ind] = ind * tstep
                     mu2vtime[1,ind] = massAvSize(clsnap.idsToSizes())
                     ind += 1
-	m1 = mu2vtime[0,np.where(~np.isnan(test[0]))[0]]
-	m2 = mu2vtime[1,np.where(~np.isnan(test[0]))[0]]
+	m1 = mu2vtime[0,np.where(~np.isnan(mu2vtime[0]))[0]]
+	m2 = mu2vtime[1,np.where(~np.isnan(mu2vtime[0]))[0]]
 	mu2vtime = np.array([m1,m2])
         return mu2vtime
         
