@@ -279,15 +279,15 @@ def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,tstart=0):
     if fullreturn:
         mu2s[:,len(fnames)] = mu2
     if plotstats is not None:
-        ax.plot(dt * np.arange(T,0.1),mu2[0] + (2/tc)*dt*np.arange(0,T,0.1),
+        ax.plot(dt * np.arange(0,T,0.1),mu2[0] + (2/tc)*dt*np.arange(0,T,0.1),
                  linestyle='--',linewidth=2,color='black')
         #plt.tight_layout()
         Ks = 2/tcs
         sigma = np.std(Ks)
         K = 2/tc
-        ax.fill_between(dt*np.arange(T,0.1),mu2[0] \
-                        + (K-sigma)*dt*np.arange(T,0.1),
-                         mu2[0]+(K+sigma)*dt*np.arange(T,0.1),
+        ax.fill_between(dt*np.arange(0,T,0.1),mu2[0] \
+                        + (K-sigma)*dt*np.arange(0,T,0.1),
+                         mu2[0]+(K+sigma)*dt*np.arange(0,T,0.1),
                         facecolor='black',alpha=0.3)
         plt.xlabel(plotstats[1])
         plt.ylabel(plotstats[2])
