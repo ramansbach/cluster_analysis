@@ -12,7 +12,22 @@ from cdistances import conOptDistanceCython,alignDistancesCython
 #import imp
 #cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
 data_path = op.join(cl.__path__[0], 'data')
-#data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
+#data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'\
+
+def test_coms_missing_arom():
+    """
+    test the COM for the one molecule with the missing aromatic
+    """
+    fname = 'missingarom1.gsd'
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    ats = 6
+    molno = 1
+    compairs = np.array([[1,7],[0,6],[2,8],[3,9],[4,10],[5,11]])
+    clustSnap = cl.AlignedClusterSnapshot(0,traj,ats,molno,compairs=compairs)
+    pos = clustSnap.pos
+    actPos = np.array([[0.,-0.393923,0.0,0.,0.393923,0.,0.5,0.393923,0.,0.5,
+                        -0.393923,0.0,-0.5,0.393923,0.,-0.5,-0.393923,0.0]])
+    npt.assert_array_almost_equal(pos,actPos,decimal=5)
 def test_MPI():
     """
     Dummy function reminder to run the MPI tests as well

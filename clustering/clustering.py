@@ -881,56 +881,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
 
 class OpticalClusterSnapshot(ContactClusterSnapshot):
     """Class for tracking the location of optical clusters at each time step"""
-    def getComs(self,compairs,atype,snapshot,molno):
-        """Helper function to get the COMs of a subset of beads
-        
-        Parameters
-        ----------
-        compairs:  m x n numpy array
-            these are the comparative indices of the beads making up each
-            aromatic group, where m is the number of aromatics and n is the
-            number of beads in the group, eg for two beads representing a
-            ring in the 3-core model, this should be
-            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
-        atype: hoomd bead type
-            should be the type referring to the aromatic beads
-        snapshot: gsd snapshot at the particular time of interest
-        molno: int
-            number of molecules in snapshot
-        
-        Returns
-        -------
-        aCOMS: nPairs x 3 numpy array
-            array of COM positions for each bead
-            
-        Raises
-        ------
-        RuntimeError 
-            if the number of beads in the aromatics isn't equal to the 
-            total number of aromatics * beads in an aromatic
-        """
-        tind = snapshot.particles.types.index(atype)
-        types = snapshot.particles.typeid
-        ats = self.ats
-        aBeads = snapshot.particles.position[np.where(types==tind)[0]]
-        pairShape = np.shape(compairs)
-        nPairs = pairShape[0]
-        aromSize = pairShape[1]
-        beadNo = np.shape(aBeads)[0]
-        if nPairs * aromSize != beadNo / molno:
-            raise RuntimeError("number of beads ({0} in {1} molecules)\
-            does not divide cleanly \
-            among aromatics ({2}) of size {3}".format(beadNo,molno,nPairs,
-                                                     aromSize))
-        aCOMs = np.zeros([nPairs * molno,3])
-        for moli in range(molno):
-            aBeadsMol = aBeads[(moli * beadNo / molno):(moli * beadNo / molno)\
-                                + beadNo / molno,:]
-            for m in range(nPairs):
-                
-                    aCOMs[moli*nPairs + m,:] = np.mean(aBeadsMol[compairs[m]],axis=0)
-
-        return aCOMs
+    
             
     def __init__(self, t, trajectory, ats, molno, atype=u'LS'):
         """ Initialize a ClusterSnapshot object.
@@ -1012,6 +963,143 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
     
 class AlignedClusterSnapshot(OpticalClusterSnapshot):
     """Class for tracking the location of aligned clusters at each time step"""
+    
+    def getComsGeneral(self,compairs,atype,snapshot,molno):
+        """Helper function to get the COMs of a subset of beads
+        
+        Parameters
+        ----------
+        compairs:  m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        snapshot: gsd snapshot at the particular time of interest
+        molno: int
+            number of molecules in snapshot
+        
+        Returns
+        -------
+        aCOMS: nPairs x 3 numpy array
+            array of COM positions for each bead
+            
+        Raises
+        ------
+        RuntimeError 
+            if the number of beads in the aromatics isn't equal to the 
+            total number of aromatics * beads in an aromatic
+        
+            
+        Notes
+        -----
+        This is the more general way of finding COM and can be used in the 
+        future but currently should not be called.
+        """
+        tind = snapshot.particles.types.index(atype)
+        types = snapshot.particles.typeid
+        ats = self.ats
+        aBeads = snapshot.particles.position[np.where(types==tind)[0]]
+        pairShape = np.shape(compairs)
+        nPairs = pairShape[0]
+        aromSize = pairShape[1]
+        beadNo = np.shape(aBeads)[0]
+        if nPairs * aromSize != beadNo / molno:
+            raise RuntimeError("number of beads ({0} in {1} molecules)\
+            does not divide cleanly \
+            among aromatics ({2}) of size {3}".format(beadNo,molno,nPairs,
+                                                     aromSize))
+        aCOMs = np.zeros([nPairs * molno,3])
+        for moli in range(molno):
+            aBeadsMol = aBeads[(moli * beadNo / molno):(moli * beadNo / molno)\
+                                + beadNo / molno,:]
+            for m in range(nPairs):
+                
+                    aCOMs[moli*nPairs + m,:] = np.mean(aBeadsMol[compairs[m]],axis=0)
+
+        return aCOMs
+    def getComs(self,compairs,atype,snapshot,molno,revr=1):
+        """Helper function to get the COMs of a subset of beads
+        
+        Parameters
+        ----------
+        compairs:  m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        snapshot: gsd snapshot at the particular time of interest
+        molno: int
+            number of molecules in snapshot
+        revr: int
+            should be 1 or -1, which defines which direction rvec should go
+            (from bead in col 1 -> bead in col 2 or vice versa)
+        
+        Returns
+        -------
+        aCOMS: nPairs x 3 numpy array
+            array of COM positions for each bead
+            
+        Raises
+        ------
+        RuntimeError 
+            if the number of beads in the aromatics isn't equal to the 
+            total number of aromatics * beads in an aromatic
+            
+        RuntimeError
+            if the pairs aren't pairs -> that requires a DIFFERENT KIND OF
+            CLUSTER
+            
+        RuntimeError
+            if revr isn't 1 or -1
+            
+        Notes
+        -----
+        For this type of cluster, we check the vector pointing between the 
+        first bead pair and assume that the COM is located at bead1 + 1/2(vec)
+        for all three COMs
+        
+        This will *only* work for COM pairs of beads and you need to know
+        which way rvec should be going! (which depends on which bead is
+        missing, if any of them are.)  If there is a bead missing from the
+        pairs you MUST check which one it is and pass in whether rvec
+        should be reversed.
+        """
+        if revr != 1 and revr != -1:
+            raise RuntimeError("revr should be 1 or -1.")
+        tind = snapshot.particles.types.index(atype)
+        types = snapshot.particles.typeid
+        ats = self.ats
+        aBeads = snapshot.particles.position[np.where(types==tind)[0]]
+        pairShape = np.shape(compairs)
+        nPairs = pairShape[0]
+        aromSize = pairShape[1]
+        if pairShape[1] != 2:
+            raise RuntimeError("Not pairs.  Call the general getCOM function")
+        beadNo = np.shape(aBeads)[0]
+        if nPairs * aromSize != beadNo / molno:
+            raise RuntimeError("number of beads ({0} in {1} molecules)\
+            does not divide cleanly \
+            among aromatics ({2}) of size {3}".format(beadNo,molno,nPairs,
+                                                     aromSize))
+        aCOMs = np.zeros([nPairs * molno,3])
+        for moli in range(molno):
+            aBeadsMol = aBeads[(moli * beadNo / molno):(moli * beadNo / molno)\
+                                + beadNo / molno,:]
+            #pdb.set_trace()
+            
+            rvec = revr*(aBeadsMol[compairs[0][1]] - aBeadsMol[compairs[0][0]])/2
+           
+            for m in range(nPairs):
+                
+                    aCOMs[moli*nPairs + m,:] = aBeadsMol[compairs[m][0]]+rvec
+
+        return aCOMs
     
     def __init__(self, t, trajectory, ats, molno, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]), 
