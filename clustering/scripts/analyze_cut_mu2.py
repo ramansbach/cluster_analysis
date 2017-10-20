@@ -43,9 +43,9 @@ matplotlib.rc('font', **font)
 
 runs = 1
 
-ttotal = 2
+ttotal = 399
 ttotals = {'contact':ttotal,'optical':ttotal,'aligned':ttotal}
-tstart = 397
+tstart = 0
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
 molno = 10648
@@ -84,9 +84,9 @@ start = time()
 
 
 
-for ctype in ['contact','optical','aligned']:
+for ctype in ['contact','optical']:
     #pdb.set_trace()
-    cszNames = [op.join(save_path,fbase + 'cut'+str(cs[ctype])+ str(runi+1) + ctype + '-sizes.dat') \
+    cszNames = [op.join(save_path,fbase + 'test'+str(cs[ctype])+ str(runi+1) + ctype + '-sizes.dat') \
                 for runi in range(runs)]
     for run in range(runs):
        # pdb.set_trace()
@@ -104,7 +104,7 @@ figeach = plt.figure()
 axseach = {}
 cid = 0
 start = time()
-for ctype in ['contact','optical','aligned']:
+for ctype in ['contact','optical']:
    axseach[ctype] = figeach.add_subplot(3,1,cid+1)
    mu2smean = np.mean(mu2s[ctype],axis=1)
    mu2sstd = np.std(mu2s[ctype],axis=1)
@@ -147,8 +147,8 @@ end = time()
 print("Time to plot mu2s: ",end-start)
 #Smoluchowski fitting
 start = time()
-for ctype in ['contact','optical','aligned']:
-    cszNames = [op.join(save_path,fbase + str(runi+1) + ctype + '-sizes.dat') \
+for ctype in ['contact','optical']:
+    cszNames = [op.join(save_path,fbase + 'test'+str(cs[ctype])+str(runi+1) + ctype + '-sizes.dat') \
             for runi in range(runs)]
     (tc,sigtc) = cl.linearWithErrors(cszNames,ttotals[ctype],tstart=tstart,dt=dt,
                                         plotstats=[op.join(save_path,
