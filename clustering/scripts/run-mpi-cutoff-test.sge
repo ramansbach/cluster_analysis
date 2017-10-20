@@ -1,0 +1,42 @@
+#!/bin/bash
+
+#$ -S /bin/bash             # use bash shell
+#$ -V                       # inherit the submission environment 
+#$ -cwd                     # start job in submission directory
+
+#$ -m abe                   # email on abort, begin, and end
+#$ -M mansbac2@illinois.edu      # email address
+#$ -o mpi-AAA-SCSCSC-BBB.log
+#$ -N mpi-AAA-SCSCSC-BBB            # job name
+#$ -j y
+#$ -q all.q                 # queue name
+#$ -pe orte CORES             # parallel environment & # cores
+##$ -l h_rt=00:10:00        # run time (hh:mm:ss)
+##$ -l hostname=compute-0-0
+
+echo " "
+echo "-------------------"
+echo "This is a $ENVIRONMENT job"
+echo "This job was submitted to the queue: $QUEUE"
+echo "The job's id is: $JOB_ID"
+echo "The job's name is: $JOB_NAME"
+echo "The job's home dir is: $SGE_O_HOME"
+echo "The job's working dir is: $SGE_O_WORKDIR"
+echo "The host node of this job is: $SGE_O_HOST"
+echo "The master node of this job is: $HOSTNAME"
+echo "The number of cores used by this job: $NSLOTS"
+echo "This job was submitted by: $SGE_O_LOGNAME"
+echo "-------------------"
+echo Running on host `hostname`
+echo Time is `date`
+echo "-------------------"
+echo " "
+
+cd $SGE_O_WORKDIR
+mpiexec -n CORES python analyze_clusters_MPI.py
+echo " "
+echo "This job is DONE!"
+echo " "
+
+exit 0
+
