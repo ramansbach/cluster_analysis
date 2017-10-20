@@ -20,7 +20,7 @@ def test_comparepy():
     """
     This reads in a set of test data, computes the correlation integral
     and saves it out.  It should then be tested against the Matlab function
-    comparepy.m
+    comparepy.m 
     """
     for i in range(1,11):
         f = open(data_path+'coords_'+str(i)+'.dat')

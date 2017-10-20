@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 import os.path as op
 import numpy as np
 import numpy.testing as npt
-
+import pdb
 import gsd.hoomd
 import sys
 import clustering as cl
@@ -13,7 +13,7 @@ from cdistances import conOptDistanceCython,alignDistancesCython
 #cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
 data_path = op.join(cl.__path__[0], 'data')
 #data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'\
-
+'''
 def test_coms_missing_arom():
     """
     test the COM for the one molecule with the missing aromatic
@@ -27,12 +27,60 @@ def test_coms_missing_arom():
     pos = clustSnap.pos
     actPos = np.array([[0.,-0.393923,0.0,0.,0.393923,0.,0.5,0.393923,0.,0.5,
                         -0.393923,0.0,-0.5,0.393923,0.,-0.5,-0.393923,0.0]])
+    #pdb.set_trace()
     npt.assert_array_almost_equal(pos,actPos,decimal=5)
+''' 
+def test_fixed_arom():
+    """
+    test making a fixed version of the "missing" aromatic
+    """
+    fname = op.join(data_path,'missingarom1.gsd')
+    outname = op.join(data_path,'fixedmissingarom1.gsd')
+    idMiss = 10
+    idPartner = 11
+    idNotMiss = 4
+    idNotPartner = 5
+    molno = 1
+    ats = 17
+    ts = np.array([0])
+    cl.fixMisplacedArom(fname,outname,idMiss,idPartner,idNotMiss,idNotPartner
+                    ,molno,ats,ts)
+    
+def test_coms_missing_arom2():
+    """
+    test the COM function 
+    """
+    fname = 'mols2.gsd'
+    #pdb.set_trace()
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    tstep = 0
+    box = traj[0].configuration.box
+    ats = 6
+    molno = 2
+    compairs = np.array([[1,7],[0,6],[2,8],[3,9],[4,10],[5,11]])
+    clustSnap = cl.AlignedClusterSnapshot(tstep,traj,ats,molno,
+                                          compairs=compairs)
+    clustSnap.writeCOMsGSD(op.join(data_path,'mol2acoms.gsd'))
+    
+def test_coms_missing_arom8():
+    """
+    test the new COM function
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    for tstep in range(1000):
+        box = traj[0].configuration.box
+        ats = 6
+        molno = 8
+        compairs = np.array([[1,7],[0,6],[2,8],[3,9],[4,10],[5,11]])
+        clustSnap = cl.AlignedClusterSnapshot(tstep,traj,ats,molno,
+                                          compairs=compairs)
+        clustSnap.writeCOMsGSD(op.join(data_path,'mol8acoms.gsd'))
 def test_MPI():
     """
     Dummy function reminder to run the MPI tests as well
     """
-    print("Please run mpiexec -n 5 python MPI_tests.py. \
+    raise NotImplementedError("Please run mpiexec -n 5 python MPI_tests.py. \
     Currently this hasn't yet been automated.")
 
 def test_ClusterSnapshot_init():

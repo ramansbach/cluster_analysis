@@ -19,7 +19,7 @@ __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
            "OpticalClusterSnapshot","AlignedClusterSnapshot",
            "ContactClusterSnapshotXTC","SnapSystem",
            "conOptDistance","conOptDistanceC","alignedDistance",
-           "alignedDistanceC"]
+           "alignedDistanceC","fixMisplacedArom"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -35,6 +35,45 @@ due.cite(Doi("10.1167/13.9.30"),
     
 
 
+def fixMisplacedArom(gsdfile,gsdout,idMiss,idPartner,idNotMiss,idNotPartner
+                    ,molno,ats,ts):
+    """
+    opens a gsd file, gets the trajectory, then writes out in place with 
+    the incorrectly placed aromatic placed correctly
+    
+    Parameters
+    ----------
+    gsdfile: string
+        filename of the file to be rewritten
+    gsdout: string
+        where to write new stuff
+    idMiss: the id of the misplaced aromatic within the molecule
+    idPartner: the id of the partner to the misplaced aromatic within the mol
+    idNotMiss: the complementary correctly placed aromatic
+    idNotPartner: idNotMiss's partner
+    ts: which timesteps of the trajectory to rewrite
+    
+    Notes
+    -----
+    pos(idMiss) = pos(idPartner) + (pos(idNotMiss) - pos(idNotPartner))
+    """   
+    traj = gsd.hoomd.open(gsdfile)
+    trajnew = gsd.hoomd.open(gsdout,'wb')
+    offset = molno
+    idMisses = offset+idMiss + np.arange(0,molno*(ats-1),ats-1)
+    idPartners = offset + idPartner + np.arange(0,molno*(ats-1),ats-1)
+    idNotMisses = offset + idNotMiss + np.arange(0,molno*(ats-1),ats-1)
+    idNotPartners = offset + idNotPartner + np.arange(0,molno*(ats-1),ats-1)
+    for t in ts:
+        snapshot = traj[t]
+        box = snapshot.configuration.box[0:3]
+        pos = snapshot.particles.position
+        pds = pos[idNotMisses] - pos[idNotPartners]
+        pds = pds - np.around(pds / box) * box
+        pos[idMisses] = pos[idPartners] + pds
+        snapnew = snapshot
+        snapnew.particles.position = pos
+        trajnew.append(snapnew)
         
 def conOptDistance(x,y):
     """
@@ -1020,86 +1059,7 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
                     aCOMs[moli*nPairs + m,:] = np.mean(aBeadsMol[compairs[m]],axis=0)
 
         return aCOMs
-    def getComs(self,compairs,atype,snapshot,molno,revr=1):
-        """Helper function to get the COMs of a subset of beads
-        
-        Parameters
-        ----------
-        compairs:  m x n numpy array
-            these are the comparative indices of the beads making up each
-            aromatic group, where m is the number of aromatics and n is the
-            number of beads in the group, eg for two beads representing a
-            ring in the 3-core model, this should be
-            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
-        atype: hoomd bead type
-            should be the type referring to the aromatic beads
-        snapshot: gsd snapshot at the particular time of interest
-        molno: int
-            number of molecules in snapshot
-        revr: int
-            should be 1 or -1, which defines which direction rvec should go
-            (from bead in col 1 -> bead in col 2 or vice versa)
-        
-        Returns
-        -------
-        aCOMS: nPairs x 3 numpy array
-            array of COM positions for each bead
-            
-        Raises
-        ------
-        RuntimeError 
-            if the number of beads in the aromatics isn't equal to the 
-            total number of aromatics * beads in an aromatic
-            
-        RuntimeError
-            if the pairs aren't pairs -> that requires a DIFFERENT KIND OF
-            CLUSTER
-            
-        RuntimeError
-            if revr isn't 1 or -1
-            
-        Notes
-        -----
-        For this type of cluster, we check the vector pointing between the 
-        first bead pair and assume that the COM is located at bead1 + 1/2(vec)
-        for all three COMs
-        
-        This will *only* work for COM pairs of beads and you need to know
-        which way rvec should be going! (which depends on which bead is
-        missing, if any of them are.)  If there is a bead missing from the
-        pairs you MUST check which one it is and pass in whether rvec
-        should be reversed.
-        """
-        if revr != 1 and revr != -1:
-            raise RuntimeError("revr should be 1 or -1.")
-        tind = snapshot.particles.types.index(atype)
-        types = snapshot.particles.typeid
-        ats = self.ats
-        aBeads = snapshot.particles.position[np.where(types==tind)[0]]
-        pairShape = np.shape(compairs)
-        nPairs = pairShape[0]
-        aromSize = pairShape[1]
-        if pairShape[1] != 2:
-            raise RuntimeError("Not pairs.  Call the general getCOM function")
-        beadNo = np.shape(aBeads)[0]
-        if nPairs * aromSize != beadNo / molno:
-            raise RuntimeError("number of beads ({0} in {1} molecules)\
-            does not divide cleanly \
-            among aromatics ({2}) of size {3}".format(beadNo,molno,nPairs,
-                                                     aromSize))
-        aCOMs = np.zeros([nPairs * molno,3])
-        for moli in range(molno):
-            aBeadsMol = aBeads[(moli * beadNo / molno):(moli * beadNo / molno)\
-                                + beadNo / molno,:]
-            #pdb.set_trace()
-            
-            rvec = revr*(aBeadsMol[compairs[0][1]] - aBeadsMol[compairs[0][0]])/2
-           
-            for m in range(nPairs):
-                
-                    aCOMs[moli*nPairs + m,:] = aBeadsMol[compairs[m][0]]+rvec
 
-        return aCOMs
     
     def __init__(self, t, trajectory, ats, molno, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]), 
@@ -1139,6 +1099,7 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
         """
         self.timestep = t
         self.ats = ats
+        
         if type(trajectory) is np.ndarray:
             carray = trajectory
             self.timestep = int(carray[0])
@@ -1148,26 +1109,161 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
             pend = 4 + 3 * ats * molno
             self.pos = np.reshape(carray[4:pend],[molno,3*ats])
             self.clusterIDs = carray[pend:len(carray)]
+            self.box = None
         else:
             if t != -1: 
                 snapshot = trajectory[t]
                 
-                
+                self.box = snapshot.configuration.box
                 self.pos = self.getComs(compairs,atype,trajectory[t],molno)
                 sz = np.shape(self.pos)
                 if sz[0] % ats != 0:
                     raise RuntimeError("Number of particles not divisible by \
                                         number of beads per molecules.")
                 self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+                
             else:#create a dummy object to help with mpi scattering
                 snapshot = trajectory[0]
+                self.box = snapshot.configuration.box
                 self.pos = self.getComs(compairs,atype,snapshot,molno)
                 sz = np.shape(self.pos)
                 self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
                 self.pos = float('NaN') * self.pos
+                
             self.nclusts = molno
             self.clusterIDs = range(int(sz[0] / ats))
+        
+    def getComs(self,compairs,atype,snapshot,molno,missingID=None):
+        """Helper function to get the COMs of a subset of beads
+        
+        Parameters
+        ----------
+        compairs:  m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        snapshot: gsd snapshot at the particular time of interest
+        molno: int
+            number of molecules in snapshot
+
+        
+        Returns
+        -------
+        aCOMS: nPairs x 3 numpy array
+            array of COM positions for each bead
             
+        Raises
+        ------
+        RuntimeError 
+            if the number of beads in the aromatics isn't equal to the 
+            total number of aromatics * beads in an aromatic
+            
+        RuntimeError
+            if the pairs aren't pairs -> that requires a DIFFERENT KIND OF
+            CLUSTER
+
+            
+        NotImplementedError
+            if box isn't set
+            
+        Notes
+        -----
+        For this type of cluster, we check the vector pointing between the 
+        first bead pair and assume that the COM is located at bead1 + 1/2(vec)
+        for all three COMs
+        
+        This will *only* work for COM pairs of beads and you need to know
+        which way rvec should be going! (which depends on which bead is
+        missing, if any of them are.)  If there is a bead missing from the
+        pairs you MUST check which one it is and pass in whether rvec
+        should be reversed.
+        """
+       
+        if self.box is None:
+            raise NotImplementedError("You are running on a cluster created from an array, which does not yet support box type analysis.")
+        tind = snapshot.particles.types.index(atype)
+        types = snapshot.particles.typeid
+     
+        aBeads = snapshot.particles.position[np.where(types==tind)[0]]
+        pairShape = np.shape(compairs)
+        nPairs = pairShape[0]
+        aromSize = pairShape[1]
+        if pairShape[1] != 2:
+            raise RuntimeError("Not pairs.  Call the general getCOM function")
+        beadNo = np.shape(aBeads)[0]
+        if nPairs * aromSize != beadNo / molno:
+            raise RuntimeError("number of beads ({0} in {1} molecules)\
+            does not divide cleanly \
+            among aromatics ({2}) of size {3}".format(beadNo,molno,nPairs,
+                                                     aromSize))
+        aCOMs = np.zeros([nPairs * molno,3])
+        for moli in range(molno):
+            aBeadsMol = aBeads[(moli * beadNo / molno):(moli * beadNo / molno)\
+                                + beadNo / molno,:]
+            #pdb.set_trace()
+            
+            rvec = (aBeadsMol[compairs[0][1]] - aBeadsMol[compairs[0][0]])/2
+            rvec = rvec - np.around(rvec/self.box[0:3])*self.box[0:3]
+            
+            for m in range(nPairs):
+                if compairs[m][1] == missingID:
+                    rvec = (aBeadsMol[compairs[0][1]] \
+                           - aBeadsMol[compairs[0][0]])/2
+                    rvec = rvec - np.around(rvec/self.box[0:3])*self.box[0:3]
+                    comloc = aBeadsMol[compairs[m][0]]+rvec
+                    #pdb.set_trace()
+                elif compairs[m][0] == missingID:
+                    rvec = (aBeadsMol[compairs[0][0]] \
+                           - aBeadsMol[compairs[0][1]])/2
+                    rvec = rvec - np.around(rvec/self.box[0:3])*self.box[0:3]
+                    comloc = aBeadsMol[compairs[m][0]]+rvec
+                    #pdb.set_trace()
+                else:
+                    cv = aBeadsMol[compairs[m][0]] - aBeadsMol[compairs[m][1]]
+                    cv = cv - np.around(cv/self.box[0:3])*self.box[0:3]
+                    comloc = aBeadsMol[compairs[m][1]]+cv/2
+                    #comloc = np.mean(aBeadsMol[compairs[m]],axis=0)
+                    #pdb.set_trace()
+                if np.isclose(comloc,np.array([9.360982,-1.270450,1.375538])).all():
+                    pdb.set_trace()
+                aCOMs[moli*nPairs + m,:] = comloc
+
+        return aCOMs       
+    def writeCOMsGSD(self,gsdname):
+        """ Write out a GSD file of this snapshot that shows the locations of
+        the aligned COMs after initialization
+        
+        Parameters
+        ----------
+        gsdname: string
+            what name to save the file to
+        
+        """
+        try:
+            gsdf = gsd.hoomd.open(gsdname,'ab')
+        except IOError:
+            gsdf = gsd.hoomd.open(gsdname,'wb')
+        sz = np.shape(self.pos)
+        molno = sz[0]
+        pos = np.reshape(self.pos,[sz[0]*self.ats,3])
+        #pdb.set_trace()
+        pN = sz[0]*self.ats
+        ptypes = ['A']
+        ptypeid = np.zeros(molno*self.ats).astype(int)
+        pbox = self.box
+        s = gsd.hoomd.Snapshot()
+        s.particles.N = pN
+        s.configuration.step = self.timestep
+        s.particles.types = ptypes
+        s.particles.typeid = ptypeid
+        s.configuration.box = pbox
+        s.particles.position = pos
+        gsdf.append(s)
+        
     def setClusterID(self,cutoff):
         """
         Set the cluster IDs using getClusterID
