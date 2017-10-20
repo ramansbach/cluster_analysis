@@ -183,7 +183,7 @@ def nonlinearFit(t,mu2s,plotstats=None,tol=1e-4):
         plt.close()
     return (tc,etc,sse,lmbda,elmbda)
 
-def nonlinearWithErrorsFromFile(fnames,T,dt=1.0,plotstats=None,tstart=0):
+def nonlinearWithErrorsFromFile(fnames,T,dt=1.0,plotstats=None,tstart=0,tend=-1):
     """ Perform a nonlinear fit to a number of different independent sizes
     and find the spread in the fit
     
@@ -195,6 +195,8 @@ def nonlinearWithErrorsFromFile(fnames,T,dt=1.0,plotstats=None,tstart=0):
         number of timesteps
     tstart: int
         timestep to start on, defaults to 0
+    tend: int
+        timestep to end on, if it's not -1
     dt: float
         how large a timestep is
     fullreturn: bool
@@ -214,17 +216,21 @@ def nonlinearWithErrorsFromFile(fnames,T,dt=1.0,plotstats=None,tstart=0):
     elmbda: float
         error in Smoluchowski exponent
     """
-    mu2s = np.zeros([T,len(fnames)])
+    if tend == -1:
+        tend = T + tstart
+    mu2s = np.zeros([tend-tstart,len(fnames)])
     f = 0
     for fname in fnames:
-        csizes = getSizesFromFile([fname],T)
+        csizes = getSizesFromFile([fname],T)[tstart:tend,:]
         mu2 = [massAvSize(csize) for csize in csizes]
         mu2s[:,f] = mu2
         f+=1
-    (tc,etc,sse,lmbda,elmbda) = nonlinearFit(dt*np.arange(T),mu2s,plotstats=plotstats)
+    (tc,etc,sse,lmbda,elmbda) = nonlinearFit(dt*np.arange(tend-tstart),
+                                             mu2s,plotstats=plotstats)
     return (tc,etc,sse,lmbda,elmbda)
     
-def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,tstart=0):
+def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,
+                     tstart=0,tend=-1):
     """ Perform a linear fit to a number of different independent sizes
     and find the spread in the fit
     
@@ -233,9 +239,11 @@ def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,tstart=0):
     fnames: list of strings
         all the filenames containing the sizes
     T: int
-        number of timesteps
+        number of timesteps in the original file
     tstart: int
         timestep to start on
+    tend: int
+        timestep to end on, if it's not -1        
     dt: float
         how large a timestep is
     fullreturn: bool
@@ -251,20 +259,23 @@ def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,tstart=0):
     etc: float
         error in the average coagulation time
     """
+    if tend == -1:
+        tend = T+tstart
     tcs = np.zeros(len(fnames))
     i = 0
     if plotstats is not None:
         fig = plt.figure(1)
     if fullreturn:
-        mu2s = np.zeros([T,len(fnames)+1])
+        mu2s = np.zeros([tend-tstart,len(fnames)+1])
     for fname in fnames:
-        csizes = getSizesFromFile([fname],T)
+        csizes = getSizesFromFile([fname],T)[tstart:tend,:]
         mu2 = [massAvSize(csize) for csize in csizes]
-        (tc,R2) = linearFit(dt * np.arange(T),mu2)
+        (tc,R2) = linearFit(dt * np.arange(tend-tstart),mu2)
         if plotstats is not None:
             ax = fig.add_subplot(111)
             #pdb.set_trace()
-            runl, = ax.plot(dt * np.arange(T),mu2,plotstats[3][i],fillstyle='none')
+            runl, = ax.plot(dt * np.arange(tend-tstart),mu2,
+                            plotstats[3][i],fillstyle='none')
             
             runl.set_label('$R^2$ = {0}'.format(round(R2,2)))
             #ax.legend()
@@ -273,21 +284,22 @@ def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,tstart=0):
         
         tcs[i] = tc
         i+=1
-    csizes = getSizesFromFile(fnames,T)
+    csizes = getSizesFromFile(fnames,T)[tstart:tend,:]
     mu2 = [massAvSize(csize) for csize in csizes]
-    (tc,R2) = linearFit(dt * np.arange(T),mu2)
+    (tc,R2) = linearFit(dt * np.arange(tend-tstart),mu2)
     if fullreturn:
         mu2s[:,len(fnames)] = mu2
     if plotstats is not None:
-        ax.plot(dt * np.arange(0,T,0.1),mu2[0] + (2/tc)*dt*np.arange(0,T,0.1),
+        ax.plot(dt * np.arange(0,tend-tstart,0.1),
+                mu2[0] + (2/tc)*dt*np.arange(0,tend-tstart,0.1),
                  linestyle='--',linewidth=2,color='black')
         #plt.tight_layout()
         Ks = 2/tcs
         sigma = np.std(Ks)
         K = 2/tc
-        ax.fill_between(dt*np.arange(0,T,0.1),mu2[0] \
-                        + (K-sigma)*dt*np.arange(0,T,0.1),
-                         mu2[0]+(K+sigma)*dt*np.arange(0,T,0.1),
+        ax.fill_between(dt*np.arange(0,tend-tstart,0.1),mu2[0] \
+                        + (K-sigma)*dt*np.arange(0,tend-tstart,0.1),
+                         mu2[0]+(K+sigma)*dt*np.arange(0,tend-tstart,0.1),
                         facecolor='black',alpha=0.3)
         plt.xlabel(plotstats[1])
         plt.ylabel(plotstats[2])
@@ -304,11 +316,11 @@ def linearWithErrors(fnames,T,dt=1.0,fullreturn=False,plotstats=None,tstart=0):
             for fname in fnames:
                 mu2curr = mu2s[:,f]
                 plt.figure()
-                plt.plot(dt*np.arange(0,T,0.1),
-                         mu2curr[0]+(2/tcs[f])*dt*np.arange(0,T,0.1),
+                plt.plot(dt*np.arange(0,tend-tstart,0.1),
+                         mu2curr[0]+(2/tcs[f])*dt*np.arange(0,tend-tstart,0.1),
                          linestyle='--',linewidth=2,color='black')
-                plt.plot(dt*np.arange(0,T),mu2curr,linewidth=2)
-                plt.plot(dt*np.arange(0,T),mu2curr,'o')
+                plt.plot(dt*np.arange(0,tend-tstart),mu2curr,linewidth=2)
+                plt.plot(dt*np.arange(0,tend-tstart),mu2curr,'o')
                 plt.xlabel(plotstats[1])
                 plt.ylabel(plotstats[2])
                 plt.title('run '+str(f))

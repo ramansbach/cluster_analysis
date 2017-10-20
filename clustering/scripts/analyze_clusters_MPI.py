@@ -46,7 +46,7 @@ size = comm.Get_size()
 
 runs = 1
 
-ttotal = 300
+ttotal = 399
 tstart = 0
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
@@ -111,7 +111,7 @@ start = time()
 for Syst in Systs:
     Syst.get_clusters_mpi('contact',ttotal=ttotal)
     Syst.get_clusters_mpi('optical',ttotal=ttotal)
-    #Syst.get_clusters_mpi('aligned',ttotal=ttotal)
+    Syst.get_clusters_mpi('aligned',ttotal=ttotal)
 end = time()
 if rank == 0:
     print("Time to get clusters: ",end-start)
@@ -123,7 +123,7 @@ if rank == 0:
             'aligned':np.zeros([ttotal,runs])}
     start = time()
     for Syst in Systs:
-        for ctype in ['contact','optical']:
+        for ctype in ['contact','optical','aligned']:
             #write out cluster sizes and cluster IDs at each time step
             cidName = fbase + 'cut'+str(cs[ctype]) + str(run+1) + ctype + '-CIDs.dat'
             cszName = fbase + 'cut' + str(cs[ctype]) + str(run+1) + ctype + '-sizes.dat'
