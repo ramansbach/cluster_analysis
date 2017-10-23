@@ -109,14 +109,14 @@ for ctype in ['contact','optical','aligned']:
    axseach[ctype] = figeach.add_subplot(3,1,cid+1)
    mu2smean = np.mean(mu2s[ctype],axis=1)
    mu2sstd = np.std(mu2s[ctype],axis=1)
-   runl, = axall.plot(dt*np.arange(tstart,ttotal+tstart),mu2smean,linewidth=2,
+   runl, = axall.plot(dt*np.arange(0,ttotal),mu2smean,linewidth=2,
                       color=colors[ctype])
    runl.set_label(ctype)
-   axseach[ctype].plot(dt*np.arange(tstart,ttotal+tstart),mu2smean,linewidth=2,
+   axseach[ctype].plot(dt*np.arange(ttotal),mu2smean,linewidth=2,
                        color=colors[ctype])
-   axall.fill_between(np.arange(tstart,ttotal+tstart),mu2smean-mu2sstd,mu2smean+mu2sstd,
+   axall.fill_between(np.arange(ttotal),mu2smean-mu2sstd,mu2smean+mu2sstd,
                       facecolor=colors[ctype],alpha=0.3)
-   axseach[ctype].fill_between(np.arange(tstart,ttotal+tstart),mu2smean-mu2sstd,
+   axseach[ctype].fill_between(np.arange(ttotal),mu2smean-mu2sstd,
                                mu2smean+mu2sstd,facecolor=colors[ctype],
                                alpha=0.3)
    axseach[ctype].set_xlabel(r'$t/\tau^*$')
