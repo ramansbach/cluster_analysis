@@ -149,7 +149,7 @@ print("Time to plot mu2s: ",end-start)
 #Smoluchowski fitting
 start = time()
 for ctype in ['contact','optical']:
-    cszNames = [op.join(save_path,fbase + 'test'+str(cs[ctype])+str(runi+1) + ctype + '-sizes.dat') \
+    cszNames = [op.join(save_path,fbase + 'cut'+str(cs[ctype])+str(runi+1) + ctype + '-sizes.dat') \
             for runi in range(runs)]
     (tc,sigtc) = cl.linearWithErrors(cszNames,ttotals[ctype],tstart=tstart,dt=dt,
                                         plotstats=[op.join(save_path,
