@@ -85,7 +85,7 @@ start = time()
 
 
 
-for ctype in ['contact','optical']:
+for ctype in ['contact','optical','aligned']:
     #pdb.set_trace()
     cszNames = [op.join(save_path,fbase + 'cut'+str(cs[ctype])+ str(runi+1) + ctype + '-sizes.dat') \
                 for runi in range(runs)]
@@ -105,7 +105,7 @@ figeach = plt.figure()
 axseach = {}
 cid = 0
 start = time()
-for ctype in ['contact','optical']:
+for ctype in ['contact','optical','aligned']:
    axseach[ctype] = figeach.add_subplot(3,1,cid+1)
    mu2smean = np.mean(mu2s[ctype],axis=1)
    mu2sstd = np.std(mu2s[ctype],axis=1)
@@ -148,7 +148,7 @@ end = time()
 print("Time to plot mu2s: ",end-start)
 #Smoluchowski fitting
 start = time()
-for ctype in ['contact','optical']:
+for ctype in ['contact','optical','aligned']:
     cszNames = [op.join(save_path,fbase + 'cut'+str(cs[ctype])+str(runi+1) + ctype + '-sizes.dat') \
             for runi in range(runs)]
     (tc,sigtc) = cl.linearWithErrors(cszNames,ttotals[ctype],tstart=tstart,dt=dt,
