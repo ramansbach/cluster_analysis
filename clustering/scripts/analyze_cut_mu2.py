@@ -41,11 +41,12 @@ font = {'weight' : 'bold',
 matplotlib.rc('font', **font)
 
 
-runs = 1
+runs = 5
 
 ttotal = 399
 ttotals = {'contact':ttotal,'optical':ttotal,'aligned':ttotal}
-tstart = 0
+tstart = 50
+tend = 399
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
 molno = 10648
@@ -86,7 +87,7 @@ start = time()
 
 for ctype in ['contact','optical']:
     #pdb.set_trace()
-    cszNames = [op.join(save_path,fbase + 'test'+str(cs[ctype])+ str(runi+1) + ctype + '-sizes.dat') \
+    cszNames = [op.join(save_path,fbase + 'cut'+str(cs[ctype])+ str(runi+1) + ctype + '-sizes.dat') \
                 for runi in range(runs)]
     for run in range(runs):
        # pdb.set_trace()
@@ -154,13 +155,14 @@ for ctype in ['contact','optical']:
                                         plotstats=[op.join(save_path,
                                         fbase+'smol-linear-'+ctype),
                                         r'$t/\tau^*$',
-                                        '$\mu_2$',['o','x','^','v','s']])
+                                        '$\mu_2$',['o','x','^','v','s']],
+					tend=tend)
     (nltc,nlsigtc,sse,lmbda,siglmbda) = \
     cl.nonlinearWithErrorsFromFile(cszNames,ttotals[ctype],dt=dt,tstart=tstart,
                                plotstats=[op.join(save_path,
                                                   fbase+'smol-NL-'+ctype)
                                ,'t (0.05 ns)','$\mu_2$',
-                               ['o','x','^','v','s']])
+                               ['o','x','^','v','s']],tend=tend)
     ftcs = open(op.join(save_path,fbase+'smol-data-'+ctype+'.dat'),'w')
     ftcs.write('#tc sigtc nltc nlsigtc lmbda siglmbda sse\n')
     ftcs.write('{0} {1} {2} {3} {4} {5} {6}\n'.format(tc,sigtc,nltc[0],nlsigtc,

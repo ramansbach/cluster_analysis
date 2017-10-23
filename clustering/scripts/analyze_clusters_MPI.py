@@ -44,7 +44,7 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-runs = 1
+runs = 5
 
 ttotal = 399
 tstart = 0
@@ -85,25 +85,6 @@ Systs = [cl.SnapSystem(gsd.hoomd.open(fname),ats,molno,cutoff,
 end = time()
 if rank == 0:
     print("Time to setup clusters: ",end-start)
-    start = time()
-    testlocs = gsd.hoomd.open(op.join(data_path,'aligncomlocs.gsd'),'wb')
-    snap = Systs[0].clsnaps['aligned'][0]
-    pos = snap.pos
-    pos = np.reshape(pos,[molno*ats['aligned'],3])
-    pN = molno*ats['aligned']
-    ptypes = ['A']
-    ptypeid = np.zeros(molno*ats['aligned']).astype(int)
-    pbox = gsd.hoomd.open(fname)[0].configuration.box
-    s = gsd.hoomd.Snapshot()
-    s.particles.N = pN
-    s.configuration.step = 0
-    s.particles.types = ptypes
-    s.particles.typeid = ptypeid
-    s.configuration.box = pbox
-    s.particles.position = pos
-    testlocs.append(s)
-    end = time()
-    print("Time to write out align COMs: ",end-start)
     
 
 #Find all cluster IDs     
@@ -133,3 +114,5 @@ if rank == 0:
             #pdb.set_trace()
             
         run += 1
+    end = time()
+    print("Time to write out clusters: ",end-start)
