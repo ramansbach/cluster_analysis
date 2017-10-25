@@ -3,7 +3,7 @@ import numpy as np
 
 import pdb
 from cfractald import corrDim, getCOMs
-__all__ = ['corrcalc','getCOMsPy','getCOMs','getCOMnumpy']
+__all__ = ['corrcalc','getCOMsPy','getCOMs','getCOMnumpy','methodL','fit2']
 
 def getCOMnumpy(poslist,masslist):
     #return com coordinates of a single molecule, written in python using numpy
@@ -49,6 +49,133 @@ def getcomsPy( pos, coms, masslist, beads, mols):
     coms = np.reshape(coms,[mols,3]) 
     return coms
     
+class LineFit(object):
+    """ A simple container for slope, intercept, and variance of a line fit
+    
+    Attributes
+    ----------
+    slope: slope of line fit
+    intercept: intercept of line fit
+    slopeVar: variance of the slope
+    interVar: variance of the intercept    
+    
+    """
+    def __init__(self,s,i,sV,iV):
+        self.slope = s
+        self.intercept = i
+        self.slopeVar = sV
+        self.interVar = iV
+
+
+def fit2(x,y,w,i):
+    """ Helper function for L method. Takes independent and dependent data
+    and performs two linear fits, splitting the data at index i.
+    
+    Parameters
+    ----------
+    x: numpy vector
+        the independent variable
+    y: numpy vector
+        the dependent variable
+    w: numpy vector
+        weights for the fit
+    i: int
+        the index to split on
+        
+    Returns
+    -------
+    rmset: float
+        total root mean square error
+    line1: LineFit object
+        first line fit
+    line2: LineFit object
+        second line fit
+    
+    """
+    pf1 = np.polyfit(x[0:i+1],y[0:i+1],1,w=w[0:i+1],full=True)
+    p1 = pf1[0]
+    sse1 = pf1[1][0]
+    v1 = i - 2
+    mse1 = sse1/v1
+    rmse1 = np.sqrt(mse1)
+
+    pf2 = np.polyfit(x[i:len(x)],y[i:len(x)],1,w=w[i:len(x)],full=True)
+    p2 = pf2[0]
+    sse2 = pf2[1][0]
+    v2 = len(x) - i - 2
+    mse2 = sse2/v2
+    rmse2 = np.sqrt(mse2)
+
+    (p1,cov1) = np.polyfit(x[0:i+1],y[0:i+1],1,w=w[0:i+1],cov=True)
+    (p2,cov2) = np.polyfit(x[i:len(x)],y[i:len(x)],1,w=w[i:len(x)],cov=True)
+    
+    line1 = LineFit(p1[0],p1[1],cov1[0][0],cov1[1][1])
+    line2 = LineFit(p2[0],p2[1],cov2[0][0],cov2[1][1])
+    
+    #pdb.set_trace()
+    rmset = ((i-1.)/(len(x)-1.))*rmse1 + ((len(x)-i)/(len(x)-1.))*rmse2    
+    return (rmset,line1,line2)
+    
+def methodL(x,y,w,xstart=None,xend=None):
+    """ Performs the L method on y vs x data
+    
+    Parameters
+    ----------
+    x: numpy vector
+        the independent variable
+    y: numpy vector
+        the dependent variable
+    w: numpy vector
+        weights for the fit
+    xstart: float
+        the x value at which to start, if not starting from the initial one
+        if it is None, defaults to starting from the beginning
+    xend: float
+        the x value at which to end, if not ending at the final value
+        if it is None, defaults to ending at the final value
+        
+    Returns
+    -------
+    xjunct: float
+        the x value at which to break between the two lines
+    line1: a simple struct containing slope and intercept
+    line2: a simple struct containing slope and intercept
+    totalErr: float
+        total root mean squared error
+        
+    Notes
+    -----
+    The L method simply finds the spot where to break the data such that two
+    lines fitted to the data return the minimum possible root mean square 
+    error, which is computed as
+    
+    RMSET = ((j-1)/(length(vals)-1))*RMSE1 
+            + ((length(vals)-j)/(length(vals)-1))*RMSE2,
+            
+    where RMSE1 is the root mean square error of line 1, RMSE2 is the root 
+    mean square error of line 2, j is the point of switching over, and vals
+    is the set of dependent variables
+    """
+    if xstart is None:
+        xstart = min(x)
+    if xend is None:
+        xend = max(x)
+    istart = np.abs(x-xstart).argmin()
+    iend = np.abs(x-xend).argmin()
+    x = x[istart:(iend+1)]
+    y = y[istart:(iend+1)]
+    rmset = np.inf
+    for i in range(3,len(x)-3):
+        
+        (rmsetj,linei1,linei2) = fit2(x,y,w,i)
+        #pdb.set_trace()
+        if rmsetj < rmset:
+            rmset = rmsetj
+            xjunct = i
+            line1 = linei1
+            line2 = linei2
+    return (xjunct,line1,line2,rmset)
+            
 def corrcalc(coms,emax,estep,fname=None):
     """ Given the locations of the beads in a snapshot, find and write out
     the C(e) function

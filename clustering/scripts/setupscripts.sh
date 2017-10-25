@@ -15,7 +15,7 @@ for i in `seq 0 23`; do
 	BBB=${BBBS[$i]}
 	CORES=8
 	echo $i-$AAA-$SCSCSC-$BBB
-	SCRIPTS=(run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge)
+	SCRIPTS=(run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge corrdim_timing.py run-corrdim-analyze.sge)
 	for script in "${SCRIPTS[@]}"; do
 		sed "s/SSS/$SFOLD\/$AAA-$SCSCSC-$BBB\'/g" $script  > $RFOLD/$AAA-$SCSCSC-$BBB/$script
 		sed -i "s/AAA/$AAA/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script

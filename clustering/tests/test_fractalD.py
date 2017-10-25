@@ -12,10 +12,98 @@ from cdistances import conOptDistanceCython,alignDistancesCython
 from cfractald import getCOMs
 data_path = op.join(cl.__path__[0],'data')
 data_path2 = op.join(cl.__path__[0],'tests/test_fractalD')
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+plt.ioff()
+font = {'weight' : 'bold',
+        'size'   : 22}
+
+matplotlib.rc('font', **font)
 #data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/tests/test_fractalD/'
 #data_path2 = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
 
+def test_fit2():
+    """
+    Test the fitting of two lines with data generated from two lines
+    stitched together
+    """
+    x = np.arange(0,10,0.1)
+    as1 = 3
+    ai1 = -4.7
+    as2 = 0.5
+    y = np.arange(0,10,0.1)
+    w = np.ones(np.shape(y))
+    ajunct = 38
+    y[0:ajunct+1] = x[0:ajunct+1]*as1 + ai1
+    y[(ajunct):len(y)] = as2*x[(ajunct):len(y)] - as2*x[ajunct]\
+                           + y[ajunct]
+    (r,l1,l2) = cl.fit2(x,y,w,ajunct)
+    npt.assert_almost_equal(l1.slope,as1)
+    npt.assert_almost_equal(l2.slope,as2)
+    npt.assert_almost_equal(l1.intercept,ai1)
+    npt.assert_almost_equal(l2.intercept,ai1+as1*x[ajunct] - as2 * x[ajunct])
+    npt.assert_almost_equal(r,0)
 
+def test_methodL():
+    """
+    Test the L method simply
+    """
+    x = np.arange(0,10,0.1)
+    as1 = 3
+    ai1 = -4.7
+    as2 = 0.5
+    y = np.arange(0,10,0.1)
+    w = np.ones(np.shape(y))
+    ajunct = 38
+    y[0:ajunct+1] = x[0:ajunct+1]*as1 + ai1
+    y[(ajunct):len(y)] = as2*x[(ajunct):len(y)] - as2*x[ajunct]\
+                           + y[ajunct]
+    (xjunct,l1,l2,terr) = cl.methodL(x,y,w)
+    assert xjunct == ajunct
+    npt.assert_almost_equal(l1.slope,as1)
+    npt.assert_almost_equal(l2.slope,as2)
+    npt.assert_almost_equal(l1.intercept,ai1)
+    npt.assert_almost_equal(l2.intercept,ai1+as1*x[ajunct] - as2 * x[ajunct])
+    npt.assert_almost_equal(terr,0)
+
+def test_noisyL():
+    """
+    Test the L method on the mean of noisy data (with plot and weights)
+    """
+    x = np.arange(0,10,0.1)
+    as1 = 3
+    ai1 = -4.7
+    as2 = 0.5
+    y = np.arange(0,10,0.1)
+    figname = op.join(data_path2,'noisyLmethod')
+    markers = ['x','s','^','v','o']
+    ajunct = 38
+    y[0:ajunct+1] = x[0:ajunct+1]*as1 + ai1
+    y[(ajunct):len(y)] = as2*x[(ajunct):len(y)] - as2*x[ajunct]\
+                           + y[ajunct]
+    runs = 5
+    ys = np.zeros([len(x),runs])
+    for run in range(runs):
+        noise = np.random.randn(len(x))
+        ys[:,run] = y + noise
+    meanY = np.mean(ys,axis=1)
+    w = 1/np.std(ys,axis=1)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for run in range(runs):
+        ax.plot(x,ys[:,run],markers[run])
+    (xjunct,l1,l2,terr) = cl.methodL(x,meanY,w)
+    ax.plot(x[0:xjunct],l1.slope*x[0:xjunct]+l1.intercept,color='black')
+    ax.plot(x[xjunct:len(x)],l2.slope*x[xjunct:len(x)]+l2.intercept,color='black')
+    fig.savefig(figname)
+    plt.close()
+    npt.assert_approx_equal(xjunct,ajunct,1)
+    npt.assert_approx_equal(l1.slope,as1,1)
+    npt.assert_approx_equal(l2.slope,as2,1)
+    npt.assert_approx_equal(l1.intercept,ai1,1)
+    npt.assert_approx_equal(l2.intercept,ai1+as1*x[ajunct] - as2 * x[ajunct],1)
+    
 def test_comparepy():
     """
     This reads in a set of test data, computes the correlation integral
