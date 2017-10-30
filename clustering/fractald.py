@@ -92,6 +92,7 @@ def fit2(x,y,w,i):
         second line fit
     
     """
+    
     pf1 = np.polyfit(x[0:i+1],y[0:i+1],1,w=w[0:i+1],full=True)
     p1 = pf1[0]
     sse1 = pf1[1][0]
@@ -174,6 +175,7 @@ def methodL(x,y,w,xstart=None,xend=None):
             xjunct = i
             line1 = linei1
             line2 = linei2
+    xjunct = xjunct + istart
     return (xjunct,line1,line2,rmset)
             
 def corrcalc(coms,emax,estep,fname=None):
