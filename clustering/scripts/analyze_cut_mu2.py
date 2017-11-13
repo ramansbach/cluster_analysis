@@ -45,8 +45,8 @@ runs = 5
 
 ttotal = 399
 ttotals = {'contact':ttotal,'optical':ttotal,'aligned':ttotal}
-tstart = 50
-tend = 150
+tstart = 10
+
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
 molno = 10648
@@ -105,18 +105,24 @@ figeach = plt.figure()
 axseach = {}
 cid = 0
 start = time()
+finsize = dict()
+sfinsize = dict()
 for ctype in ['contact','optical','aligned']:
    axseach[ctype] = figeach.add_subplot(3,1,cid+1)
    mu2sc = mu2s[ctype]
    ymax = np.max(mu2sc[10:len(mu2sc),:])
    mu2smean = np.mean(mu2s[ctype],axis=1)
    mu2sstd = np.std(mu2s[ctype],axis=1)
+   finsize[ctype] = mu2smean[len(mu2smean)-1]
+   sfinsize[ctype] = mu2sstd[len(mu2sstd)-1]
    runl, = axall.plot(dt*np.arange(0,ttotal),mu2smean,linewidth=2,
                       color=colors[ctype])
    
    mu2final = mu2smean[len(mu2smean)-1]
    if ctype == 'contact':
        axall.set_ylim([0,ymax])
+       tend = max(np.argmin(abs(mu2smean[tstart:len(mu2smean)]-0.97*10648))+tstart,tstart+10)
+       #pdb.set_trace()
    axseach[ctype].set_ylim([0,ymax])
    runl.set_label(ctype)
    axseach[ctype].plot(dt*np.arange(ttotal),mu2smean,linewidth=2,
@@ -171,9 +177,10 @@ for ctype in ['contact','optical','aligned']:
                                ,'t (0.05 ns)','$\mu_2$',
                                ['o','x','^','v','s']],tend=tend)
     ftcs = open(op.join(save_path,fbase+'smol-data-'+ctype+'.dat'),'w')
-    ftcs.write('#tc sigtc nltc nlsigtc lmbda siglmbda sse\n')
-    ftcs.write('{0} {1} {2} {3} {4} {5} {6}\n'.format(tc,sigtc,nltc[0],nlsigtc,
-                                                  lmbda,siglmbda,sse))
+    ftcs.write('#tc sigtc nltc nlsigtc lmbda siglmbda sse finsize sigfinsize\n')
+    ftcs.write('{0} {1} {2} {3} {4} {5} {6} {7} {8}\n'.format(tc,sigtc,nltc[0],nlsigtc,
+                                                  lmbda,siglmbda,sse,finsize[ctype],
+						  sfinsize[ctype]))
                                                   
     ftcs.close()
 end = time()
