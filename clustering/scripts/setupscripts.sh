@@ -2,26 +2,26 @@
 #All this script does currently is drops the analyze scripts into the correct folder with the correct templated values
 #it can loop over multiple values to set up multiple scripts
 
-RFOLD=/home/mansbac2/coarsegraining/patchy/analysis
-SFOLD="\'\/share\/scratch\/ramansbach\/coarsegraining\/hoomd\/patchy\/simulations\/offset_little"
+RFOLD=/home/mansbac2/coarsegraining/patchy/analysis/low_concentration
+SFOLD="\'\/share\/scratch\/ramansbach\/coarsegraining\/hoomd\/patchy\/analyze"
 
-AAAS=(0 37 185 370 740)
-SCSCSCS=(02 2 4 10 0)
-BBBS=(06)
-HOSTS=(0 1 2)
+AAAS=(250 500 750)
+SCSCSCS=(02 2 4)
+BBBS=(025 050 075 125)
+HOSTS=(0 1 2 3)
 HOSTI=0
-for i in `seq 0 4`; do
+for i in `seq 0 2`; do
 	AAA=${AAAS[$i]}
-for j in `seq 0 4`; do
+for j in `seq 0 2`; do
 	SCSCSC=${SCSCSCS[$j]}
-#for k in `seq 0 1`; do
-	#BBB=${BBBS[$k]}
-	BBB=06
+for k in `seq 0 3`; do
+	BBB=${BBBS[$k]}
+	#BBB=06
 	CORES=4
 	echo $AAA-$SCSCSC-$BBB
 	SCRIPTS=(fractald_extract.py run-fd-extract.sge run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge corrdim_timing.py run-corrdim-analyze.sge)
-	#if [ -e "$RFOLD/$AAA-$SCSCSCS-$BBB" ]
-	#then
+	if [ -e "$RFOLD/$AAA-$SCSCSCS-$BBB" ]
+	then
 	echo "running $AAA-$SCSCSC-$BBB"
 	for script in "${SCRIPTS[@]}"; do
 		sed "s/SSS/$SFOLD\/$AAA-$SCSCSC-$BBB\'/g" $script  > $RFOLD/$AAA-$SCSCSC-$BBB/$script
@@ -38,8 +38,8 @@ for j in `seq 0 4`; do
 	sed -i "s/HOST/${HOSTS[$HOSTI]}/g" $RFOLD/$AAA-$SCSCSC-$BBB/run-mpi-cutoff-test.sge
 	echo "host is ${HOSTS[$HOSTI]}"
 	let HOSTI++
-	let HOSTI=HOSTI%3
-	#fi
-#done
+	let HOSTI=HOSTI%4
+	fi
+done
 done
 done

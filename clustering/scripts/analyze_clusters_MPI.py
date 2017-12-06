@@ -44,9 +44,9 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-runs = 5
+runs = 1
 
-ttotal = 399
+ttotal = 199
 tstart = 0
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
@@ -71,7 +71,7 @@ combeadtype = 'E'
 colors = {'contact':'red','optical':'blue','aligned':'olive'}
 
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
-        +str(SCdlabel)+'-'+str(BBdlabel)+'_run'
+        +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run'
 
 #fbase = 'dummyfull4_run'
 fnames = []

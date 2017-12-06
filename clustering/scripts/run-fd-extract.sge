@@ -6,13 +6,13 @@
 
 #$ -m abe                   # email on abort, begin, and end
 #$ -M mansbac2@illinois.edu      # email address
-#$ -o mpi-AAA-SCSCSC-BBB.log
-#$ -N mpi-AAA-SCSCSC-BBB            # job name
+#$ -o fD-AAA-SCSCSC-BBB.log
+#$ -N fD-AAA-SCSCSC-BBB            # job name
 #$ -j y
 #$ -q all.q                 # queue name
-#$ -pe orte CORES             # parallel environment & # cores
+#$ -pe orte 1             # parallel environment & # cores
 ##$ -l h_rt=00:10:00        # run time (hh:mm:ss)
-##$ -l hostname=compute-0-HOST
+##$ -l hostname=compute-0-0
 
 echo " "
 echo "-------------------"
@@ -33,7 +33,7 @@ echo "-------------------"
 echo " "
 
 cd $SGE_O_WORKDIR
-mpiexec -n CORES python analyze_clusters_MPI.py
+python fractald_extract.py
 echo " "
 echo "This job is DONE!"
 echo " "
