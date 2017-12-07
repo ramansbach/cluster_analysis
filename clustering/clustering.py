@@ -875,6 +875,30 @@ class ContactClusterSnapshot(ClusterSnapshot):
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
         
+    def setClusterIDFromFile(self,fname):
+        """
+        Set the cluster IDs by opening a file and checking what they are
+        
+        Parameters
+        ----------
+        fname: string
+            the name of the file that contains the clusterIDs
+        
+        Returns
+        -------
+        None, just sets clusterIDs
+        
+        Notes
+        -----
+        File format is as written out by this code package
+        """
+        f = open(fname)
+        lines = f.readlines()
+        f.close()
+        line = self.timestep
+        cIDs = lines[line].split()
+        self.clusterIDs = np.array([int(cID) for cID in cIDs])
+        
     def getClusterID(self, positions,cutoff,func):
         """
         Find the ID of which cluster each molecule is in

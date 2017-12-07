@@ -474,6 +474,29 @@ def test_writeCID():
     syst.get_clusters_serial('contact')
     syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
     
+def test_readCID():
+    """
+    test reading the CID from a file
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = {'contact':17}
+    cutoff= 1.1*1.1
+    molno = 8
+    cldict = {'contact':cutoff}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact')
+    syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
+    
+    systwrit = cl.SnapSystem(traj,ats,molno,cldict)
+    for i in range(len(systwrit.clsnaps['contact'])):
+        snapf = systwrit.clsnaps['contact'][i]
+        snapf.setClusterIDFromFile(op.join(data_path,'mols8cIDs.dat'))
+        snap = syst.clsnaps['contact'][i]
+       
+        assert (snapf.clusterIDs == snap.clusterIDs).all()
+    
 def test_writeSizes():
     """
     test writing out the clusterIDs
