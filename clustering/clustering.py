@@ -310,7 +310,30 @@ def alignedDistanceC(x,y):
     """
     mind3 = weave.inline(code,['x', 'y','dists','distsA','distsB','ats'],
                         support_code = support, libraries = ['m'])
-    return mind3    
+    return mind3
+
+def fixCoords(pos,posinit,box):
+    """
+    fixes all coords based on the initial coordinate and 
+    the periodic boundary conditions
+    
+    Parameters
+    ----------
+    pos: 1 x 3*ats numpy array
+        positions of all the beads in the molecule
+    posinit: 1 x 3 numpy array
+        initial position on which the fixing is based
+    box: 1 x 3 numpy array
+        box dimensions
+    """
+    
+    for i in range(int(len(pos)/3)):
+        #pdb.set_trace()
+        dr = pos[3*i:3*i+3] - posinit
+        dr = dr - box*np.round(dr/box)
+        pos[3*i:3*i+3] = dr + posinit
+    return pos
+    
 class SnapSystem(object):
     """Class for running the full suite of analysis software """
     
@@ -964,7 +987,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             clustSizes[cid] = dcounts[self.clusterIDs[cid]]
         return clustSizes
     
-    def fixPBC(self,cID,cutoff,box,writegsd=None):
+    def fixPBC(self,cID,cutoff,box,func,writegsd=None):
         """
         return positions for a particular cluster fixed across PBCs for 
         calculation of structural metrics like end-to-end length
@@ -980,6 +1003,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
             resultant cluster
         box: 1x3 numpy array
             box side lengths
+        func: python function
+            distance metric for BallTree computation
             
         Returns
         -------
@@ -994,30 +1019,37 @@ class ContactClusterSnapshot(ClusterSnapshot):
         inds = np.where(self.clusterIDs==cID)[0]
         positions = self.pos[inds,:]
         sz = np.shape(positions)
-        positions = positions.reshape(sz[0]*sz[1]/3,3).copy()
-        positions = positions+box/2.#recenter origin
+        
+        
         fixedXYZ = positions.copy()
-        potInds = range(1,sz[0]*sz[1]/3)
+        potInds = range(1,int(sz[0]))
         
-        BT = BallTree(positions,metric='euclidean')
-        
+        BT = BallTree(positions,metric='pyfunc',func=func)
+        fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
+                                  box)
         correctInds = [0]
-        while len(potInds) > 0:
+        while len(correctInds) > 0:
             mol = correctInds.pop()
-            neighs = BT.query_radius(BT[mol],r=cutoff)
+            
+            #pdb.set_trace()
+            neighs = BT.query_radius(positions[mol,:].reshape(1,-1),r=cutoff)[0]
+            #neighs = neighs.remove(mol)
             for n in neighs:
-                potInds.remove(n)
-                correctInds.append(n)
-                dr = fixedXYZ[n,:] - fixedXYZ[mol,:] 
-                dr = dr - box*np.round(dr/box)
-                fixedXYZ[n,:] = fixedXYZ[n,:] + dr
+                #pdb.set_trace()
+                if n in potInds:
+                    potInds.remove(n)
+                    correctInds.append(n)
+                    fixedXYZ[n,:] = fixCoords(fixedXYZ[n,:].copy(),
+                                              fixedXYZ[mol,0:3].copy(),box)
+                else:
+                    continue
         if writegsd is not None:
             f = gsd.hoomd.open(writegsd,'wb')
             s = gsd.hoomd.Snapshot()
             s.particles.N = sz[0]*sz[1]/3
             s.particles.position = fixedXYZ
-            s.configuration.box = np.concatenate(box,[0,0,0])
-            f.append(s)5
+            s.configuration.box = np.concatenate((box,[0,0,0]))
+            f.append(s)
         return fixedXYZ
 
         

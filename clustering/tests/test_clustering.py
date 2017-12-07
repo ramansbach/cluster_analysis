@@ -496,6 +496,23 @@ def test_readCID():
         snap = syst.clsnaps['contact'][i]
        
         assert (snapf.clusterIDs == snap.clusterIDs).all()
+
+def test_fixPBC():
+    """
+    test fixing clusters across PBCs
+    """
+    fname = 'dummy2PBC.gsd'
+    cutoff = 0.6
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    clustSnap = cl.ContactClusterSnapshot(0,traj,3,2)
+    clustSnap.setClusterID(cutoff)
+    fixedXYZ = clustSnap.fixPBC(0,cutoff,np.array([10.,10.,10.]),
+                                conOptDistanceCython,
+                     writegsd=op.join(data_path, 'dummy2PBCunwrapped.gsd'))
+    npt.assert_array_almost_equal(fixedXYZ,np.array([[0.,0.,4.75,0.,0.,5.25,
+                                                      0.,0.,5.75],
+                                                      [-0.5,0.,5.25,-0.5,0.,
+                                                       5.75,-0.5,0.,6.25]]))
     
 def test_writeSizes():
     """

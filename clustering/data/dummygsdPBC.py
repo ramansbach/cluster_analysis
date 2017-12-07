@@ -32,7 +32,7 @@ def createFrame(step,position,pN=pN,ptypes=ptypes,ptypeid=ptypeid,pbody=pbody,
     return s
 
 
-spos0 = np.array([0.,0.,4.75,0.,0.,-4.76,0.,0.,-4.25,-0.5,0.,-4.75,
+spos0 = np.array([0.,0.,4.75,0.,0.,-4.75,0.,0.,-4.25,-0.5,0.,-4.75,
                  -0.5,0.,-4.25,-0.5,0.,-3.75])
 tdummy = gsd.hoomd.open(name='dummy2PBC.gsd',mode='wb')
 tdummy.append(createFrame(0,spos0))
