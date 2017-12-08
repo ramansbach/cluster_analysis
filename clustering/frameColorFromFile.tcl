@@ -13,7 +13,7 @@ proc colorFrame { fname molid } {
 		set ainds [lrange $line 1 end]
 		mol addrep $molid
 		set repno [expr {$repno + 1}]
-		mol modselect $repno $molid index $ainds
+		mol modselect $repno $molid index $ainds and name LS
 		mol modstyle $repno $molid VDW 1.0 12.0
 		mol modcolor $repno $molid ColorID $c
 	}

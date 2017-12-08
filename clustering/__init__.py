@@ -4,3 +4,4 @@ from .clustering import *  # noqa
 from .smoluchowski import * 
 from .fractald import *
 from .morphology import *
+from .visualize import *
