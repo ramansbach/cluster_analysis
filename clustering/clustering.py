@@ -911,7 +911,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 if sz[0] % ats != 0:
                     raise RuntimeError("Number of particles not divisible by \
                                         number of beads per molecules.")
-                pdb.set_trace()
+                #pdb.set_trace()
                 self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
             else:#create a dummy object to help with mpi scattering
                 snapshot = trajectory[0]

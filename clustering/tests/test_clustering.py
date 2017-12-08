@@ -596,6 +596,7 @@ def test_alignedDistanceC():
     d1 = alignDistancesCython(apos1,apos2)
     npt.assert_almost_equal(d1,1.5 * 1.5, 10)
     
+    
 if __name__ == "__main__":
     '''
     test_get_clusters_serial_full()
