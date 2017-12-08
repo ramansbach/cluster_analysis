@@ -513,6 +513,32 @@ def test_fixPBC():
                                                       0.,0.,5.75],
                                                       [-0.5,0.,5.25,-0.5,0.,
                                                        5.75,-0.5,0.,6.25]]))
+                                                       
+def test_getLengthDistribution():
+    """
+    test getting the length distribution from a trajectory
+    """
+    fname = 'dummyfull4.gsd'     
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    ats = {'contact':17,'optical':12,'aligned':6}
+    molno = 4
+    cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
+    compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
+    atype = 'AB'
+    syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,atype=atype)
+    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('optical')
+    syst.get_clusters_serial('aligned')
+    box = traj[0].configuration.box[0:3]
+    ldistribt = syst.getLengthDistribution('contact',cldict['contact'],box,0,
+                               conOptDistanceCython)
+    npt.assert_array_almost_equal(ldistribt,np.array([[0.,0.,0.,0.],
+                                                      [1.22,1.22,2.92,2.92],
+                                                      [4.92,4.92,4.92,4.92],
+                                                      [4.12,4.12,4.12,4.12],
+                                                      [3.08,3.08,3.08,3.08],
+                                                      [1.93,1.93,1.93,1.93]]),
+                                                      decimal=2)
     
 def test_writeSizes():
     """
