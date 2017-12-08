@@ -6,20 +6,20 @@ RFOLD=/home/mansbac2/coarsegraining/patchy/analysis/low_concentration
 SFOLD="\'\/share\/scratch\/ramansbach\/coarsegraining\/hoomd\/patchy\/analyze"
 
 AAAS=(250 500 750)
-SCSCSCS=(2 6 10)
-BBBS=(100 150 200)
+SCSCSCS=(02 2 4)
+BBBS=(025 050 075 125)
 HOSTS=(0 1 2 3)
 HOSTI=0
 for i in `seq 0 2`; do
 	AAA=${AAAS[$i]}
 for j in `seq 0 2`; do
 	SCSCSC=${SCSCSCS[$j]}
-for k in `seq 0 2`; do
+for k in `seq 0 3`; do
 	BBB=${BBBS[$k]}
 	#BBB=06
 	CORES=4
 	echo $AAA-$SCSCSC-$BBB
-	SCRIPTS=(fractald_extract.py run-fd-extract.sge run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge corrdim_timing.py run-corrdim-analyze.sge)
+	SCRIPTS=(gsdSubsample.py run-gsd-subsample.sge fractald_extract.py run-fd-extract.sge run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge corrdim_timing.py run-corrdim-analyze.sge)
 	if [ -e "$RFOLD/$AAA-$SCSCSCS-$BBB" ]
 	then
 	echo "running $AAA-$SCSCSC-$BBB"

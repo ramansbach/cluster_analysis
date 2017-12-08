@@ -43,14 +43,17 @@ matplotlib.rc('font', **font)
 
 runs = 1
 
-ttotal = 199
+ttotal = 799
 ttotals = {'contact':ttotal,'optical':ttotal,'aligned':ttotal}
 tstart = 10
 
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
 molno = 10648
-cs={'contact':0.7,'optical':0.35,'aligned':0.35}
+cut=BBB
+c1 = float(cut)
+c1 = max(0.5,(c1/100.)*1.1225)
+cs={'contact':c1,'optical':0.35,'aligned':0.35}
 cutoff = {'contact':1.0*1.0,'optical':0.35*0.35,'aligned':0.35*0.35}
 compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])
 #compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])

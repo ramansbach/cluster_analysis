@@ -46,12 +46,12 @@ size = comm.Get_size()
 
 runs = 1
 
-ttotal = 199
+ttotal = 799
 tstart = 0
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
 molno = 10648
-c1=BBB
+c1=float(BBB)
 c2=0.35
 c3=0.35
 c1 = max(0.5,(c1/100.)*1.1225)
