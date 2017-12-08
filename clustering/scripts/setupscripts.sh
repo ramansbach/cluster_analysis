@@ -28,7 +28,6 @@ for k in `seq 0 2`; do
 		sed -i "s/AAA/$AAA/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script
 		sed -i "s/SCSCSC/\'$SCSCSC\'/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script
 		sed -i "s/BBB/\'$BBB\'/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script
-		set -i "s/CUTOFF/$BBB/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script"
 	done
 
 	sed "s/SSS/$SFOLD\/$AAA-$SCSCSC-$BBB\'/g" run-mpi-cutoff-test.sge > $RFOLD/$AAA-$SCSCSC-$BBB/run-mpi-cutoff-test.sge
