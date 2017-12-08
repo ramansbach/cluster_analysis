@@ -533,7 +533,7 @@ def test_getLengthDistribution():
     ldistribt = syst.getLengthDistribution('contact',cldict['contact'],box,0,
                                conOptDistanceCython)
     npt.assert_array_almost_equal(ldistribt,np.array([[0.,0.,0.,0.],
-                                                      [1.22,1.22,2.92,2.92],
+                                                      [2.92,2.92,1.22,1.22],
                                                       [4.92,4.92,4.92,4.92],
                                                       [4.12,4.12,4.12,4.12],
                                                       [3.08,3.08,3.08,3.08],

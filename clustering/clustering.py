@@ -876,9 +876,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         
         ats: the number of beads in a single molecule
         molno: the number of molecules in the system
-        
-        
-            the index of the cluster that each molecule belongs to
+ 
         Raises
         ------
         RuntimeError
@@ -1154,8 +1152,13 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 else:
                     
                     cIDpos = self.fixPBC(cID,cutoff,box,func)
-                
-                endendl = np.sqrt(max(pdist(cIDpos[:,3*beadID:(3*beadID+3)],metric='sqeuclidean')))
+                    sz = np.shape(cIDpos)
+                    #extract COM positions
+                    xcom = np.sum(cIDpos[:,range(0,sz[1],3)],axis=1)/(sz[1]/3.)
+                    ycom = np.sum(cIDpos[:,range(1,sz[1],3)],axis=1)/(sz[1]/3.)
+                    zcom = np.sum(cIDpos[:,range(2,sz[1],3)],axis=1)/(sz[1]/3.)
+                    cIDposcom = np.array([xcom,ycom,zcom])
+                endendl = np.sqrt(max(pdist(cIDposcom.transpose(),metric='sqeuclidean')))
                 
                 ldistrib[inds] = endendl
         return ldistrib
