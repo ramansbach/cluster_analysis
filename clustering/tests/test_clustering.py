@@ -474,6 +474,72 @@ def test_writeCID():
     syst.get_clusters_serial('contact')
     syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
     
+def test_readCID():
+    """
+    test reading the CID from a file
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    
+    ats = {'contact':17}
+    cutoff= 1.1*1.1
+    molno = 8
+    cldict = {'contact':cutoff}
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact')
+    syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
+    
+    systwrit = cl.SnapSystem(traj,ats,molno,cldict)
+    for i in range(len(systwrit.clsnaps['contact'])):
+        snapf = systwrit.clsnaps['contact'][i]
+        snapf.setClusterIDFromFile(op.join(data_path,'mols8cIDs.dat'))
+        snap = syst.clsnaps['contact'][i]
+       
+        assert (snapf.clusterIDs == snap.clusterIDs).all()
+
+def test_fixPBC():
+    """
+    test fixing clusters across PBCs
+    """
+    fname = 'dummy2PBC.gsd'
+    cutoff = 0.6
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    clustSnap = cl.ContactClusterSnapshot(0,traj,3,2)
+    clustSnap.setClusterID(cutoff)
+    fixedXYZ = clustSnap.fixPBC(0,cutoff,np.array([10.,10.,10.]),
+                                conOptDistanceCython,
+                     writegsd=op.join(data_path, 'dummy2PBCunwrapped.gsd'))
+    npt.assert_array_almost_equal(fixedXYZ,np.array([[0.,0.,4.75,0.,0.,5.25,
+                                                      0.,0.,5.75],
+                                                      [-0.5,0.,5.25,-0.5,0.,
+                                                       5.75,-0.5,0.,6.25]]))
+                                                       
+def test_getLengthDistribution():
+    """
+    test getting the length distribution from a trajectory
+    """
+    fname = 'dummyfull4.gsd'     
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    ats = {'contact':17,'optical':12,'aligned':6}
+    molno = 4
+    cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
+    compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
+    atype = 'AB'
+    syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,atype=atype)
+    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('optical')
+    syst.get_clusters_serial('aligned')
+    box = traj[0].configuration.box[0:3]
+    ldistribt = syst.getLengthDistribution('contact',cldict['contact'],box,0,
+                               conOptDistanceCython)
+    npt.assert_array_almost_equal(ldistribt,np.array([[0.,0.,0.,0.],
+                                                      [1.22,1.22,2.92,2.92],
+                                                      [4.92,4.92,4.92,4.92],
+                                                      [4.12,4.12,4.12,4.12],
+                                                      [3.08,3.08,3.08,3.08],
+                                                      [1.93,1.93,1.93,1.93]]),
+                                                      decimal=2)
+    
 def test_writeSizes():
     """
     test writing out the clusterIDs
@@ -529,6 +595,7 @@ def test_alignedDistanceC():
                       1.,-1.,0.,2.,-1.,0.])
     d1 = alignDistancesCython(apos1,apos2)
     npt.assert_almost_equal(d1,1.5 * 1.5, 10)
+    
     
 if __name__ == "__main__":
     '''

@@ -3,3 +3,5 @@ from .version import __version__  # noqa
 from .clustering import *  # noqa
 from .smoluchowski import * 
 from .fractald import *
+from .morphology import *
+from .visualize import *

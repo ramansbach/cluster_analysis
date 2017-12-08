@@ -8,7 +8,7 @@ import os
 import pdb
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist,pdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
 #from .due import due, Doi
@@ -310,7 +310,30 @@ def alignedDistanceC(x,y):
     """
     mind3 = weave.inline(code,['x', 'y','dists','distsA','distsB','ats'],
                         support_code = support, libraries = ['m'])
-    return mind3    
+    return mind3
+
+def fixCoords(pos,posinit,box):
+    """
+    fixes all coords based on the initial coordinate and 
+    the periodic boundary conditions
+    
+    Parameters
+    ----------
+    pos: 1 x 3*ats numpy array
+        positions of all the beads in the molecule
+    posinit: 1 x 3 numpy array
+        initial position on which the fixing is based
+    box: 1 x 3 numpy array
+        box dimensions
+    """
+    
+    for i in range(int(len(pos)/3)):
+        #pdb.set_trace()
+        dr = pos[3*i:3*i+3] - posinit
+        dr = dr - box*np.round(dr/box)
+        pos[3*i:3*i+3] = dr + posinit
+    return pos
+    
 class SnapSystem(object):
     """Class for running the full suite of analysis software """
     
@@ -601,6 +624,96 @@ class SnapSystem(object):
             clustSnap.setClusterID(cutoff)
         
         self.clsnaps[ctype] = clusters
+        
+    def get_clusters_from_file(self,ctype,fname):
+        """ Compute the clusters in each snapshot of the trajectory from a
+        given file name, assuming serial.
+        
+        Parameters
+        ----------
+        ctype: string
+            cluster type (contact, optical, aligned, etc)
+        fname: string
+            file name where the cluster ID data is saved
+            
+        Raises
+        ------
+        NotImplementedError
+            If the cluster type isn't one that's been programmed yet
+        """
+        if ctype not in self.cldict.keys():
+            raise NotImplementedError("Unknown cluster type \
+                                       in get_clusters_from_file.")
+        clusters = self.clsnaps[ctype]
+        for clustSnap in clusters:
+            clustSnap.setClusterIDFromFile(fname)
+        
+        self.clsnaps[ctype] = clusters
+        
+    def getLengthDistribution(self,ctype,cutoff,box,beadID,func,writegsd=None,
+                              writeldistrib=None):
+        """ Gets the length distribution at each timestep and optionally
+        writes it out to file.
+        
+        Parameters
+        ----------
+        ctype: string
+            cluster type (contact, optical, aligned, etc)
+        cutoff: float
+            Cutoff for BallTree computation for unwrapping
+        box: 1x3 numpy array
+            box side lengths
+        func: python function
+            distance metric for BallTree computation
+        beadID: int
+            which bead is the central bead used in the computation of the 
+            fibril length
+        writegsd: string or None
+            used as the base filename to write out all clusters as separate
+            gsd files. Mostly useful for debugging purposes.
+        writeldistrib: string or None
+            the filename to write out the length distributionsof the clusters
+            
+        Returns
+        -------
+        ldistribt: T x molno numpy array
+            contains the approximate end-end length that the cluster each
+            molecule participates in is at each timestep
+            
+        Raises
+        ------
+        NotImplementedError
+            If the cluster type isn't one that's been programmed yet
+            
+        Notes
+        -----
+        Computes an approximation to the end-end length as the largest 
+        distance between two participating COM beads. This is not the
+        best approximation if the aggregates are not very linear or if
+        they are linear but curl up a lot. It fails for a spanning cluster.
+
+        """
+
+        if ctype not in self.cldict.keys():
+            raise NotImplementedError("Unknown cluster type \
+                                       in get_clusters_from_file.")
+        clusters = self.clsnaps[ctype]
+        ldistribt = np.zeros([len(self.trajectory),self.molno])
+        ind = 0
+        if writeldistrib is not None:
+            f = open(writeldistrib,'w')
+        for clustSnap in clusters:
+            ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,beadID,
+                                            writegsd=writegsd)
+            ldistribt[ind,:] = ldistrib
+            if writeldistrib is not None:
+                for endendl in ldistrib:
+                    f.write('{0} '.format(endendl))
+                f.write('\n')
+            ind += 1
+        if writeldistrib is not None:
+            f.close()  
+        return ldistribt                          
     
     def getMassAvVsTime(self,ctype,tstep=1):
         """ Returns a numpy array of two columns, with time on the left and 
@@ -798,6 +911,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 if sz[0] % ats != 0:
                     raise RuntimeError("Number of particles not divisible by \
                                         number of beads per molecules.")
+                #pdb.set_trace()
                 self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
             else:#create a dummy object to help with mpi scattering
                 snapshot = trajectory[0]
@@ -875,6 +989,30 @@ class ContactClusterSnapshot(ClusterSnapshot):
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
         
+    def setClusterIDFromFile(self,fname):
+        """
+        Set the cluster IDs by opening a file and checking what they are
+        
+        Parameters
+        ----------
+        fname: string
+            the name of the file that contains the clusterIDs
+        
+        Returns
+        -------
+        None, just sets clusterIDs
+        
+        Notes
+        -----
+        File format is as written out by this code package
+        """
+        f = open(fname)
+        lines = f.readlines()
+        f.close()
+        line = self.timestep
+        cIDs = lines[line].split()
+        self.clusterIDs = np.array([int(cID) for cID in cIDs])
+        
     def getClusterID(self, positions,cutoff,func):
         """
         Find the ID of which cluster each molecule is in
@@ -914,10 +1052,114 @@ class ContactClusterSnapshot(ClusterSnapshot):
         for cid in range(len(self.clusterIDs)):
             clustSizes[cid] = dcounts[self.clusterIDs[cid]]
         return clustSizes
+    
+    def fixPBC(self,cID,cutoff,box,func,writegsd=None):
+        """
+        return positions for a particular cluster fixed across PBCs for 
+        calculation of structural metrics like end-to-end length
         
-
+        Parameters
+        ----------
+        cID: int
+            the cluster index for this particular cluster
+        cutoff: float
+            distance within which to search for neighbors
+        writegsd: bool
+            if not none, write out a gsd file to this name that shows the
+            resultant cluster
+        box: 1x3 numpy array
+            box side lengths
+        func: python function
+            distance metric for BallTree computation
+            
+        Returns
+        -------
+        pos: numpy array of floats
+            the resultant positions of the cluster
         
+        Notes
+        -----
+        Currently origin is in the center of the box; for these purposes,
+        all positions are reset such that the origin is at the corner.
+        """
+        inds = np.where(self.clusterIDs==cID)[0]
+        positions = self.pos[inds,:]
+        sz = np.shape(positions)
+        
+        
+        fixedXYZ = positions.copy()
+        potInds = range(1,int(sz[0]))
+        
+        BT = BallTree(positions,metric='pyfunc',func=func)
+        fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
+                                  box)
+        correctInds = [0]
+        while len(correctInds) > 0:
+            mol = correctInds.pop()
+            
+            #pdb.set_trace()
+            neighs = BT.query_radius(positions[mol,:].reshape(1,-1),r=cutoff)[0]
+            #neighs = neighs.remove(mol)
+            for n in neighs:
+                #pdb.set_trace()
+                if n in potInds:
+                    potInds.remove(n)
+                    correctInds.append(n)
+                    fixedXYZ[n,:] = fixCoords(fixedXYZ[n,:].copy(),
+                                              fixedXYZ[mol,0:3].copy(),box)
+                else:
+                    continue
+        if writegsd is not None:
+            f = gsd.hoomd.open(writegsd,'wb')
+            s = gsd.hoomd.Snapshot()
+            s.particles.N = sz[0]*sz[1]/3
+            s.particles.position = fixedXYZ
+            s.configuration.box = np.concatenate((box,[0,0,0]))
+            f.append(s)
+        return fixedXYZ
 
+    def getLengthDistribution(self,cutoff,box,func,beadID,
+                              writegsd=None):
+        """ Finds the end-to-end cluster length distribution
+        
+        Parameters
+        ----------
+        cutoff: float
+            Cutoff for BallTree computation for unwrapping
+        box: 1x3 numpy array
+            box side lengths
+        func: python function
+            distance metric for BallTree computation
+        beadID: int
+            which bead is the central bead used in the computation of the 
+            fibril length
+        writegsd: string or None
+            used as the base filename to write out all clusters as separate
+            gsd files. Mostly useful for debugging purposes.
+        Returns
+        -------
+        ldistrib: 1 x molno numpy array
+            length of the cluster each molecule belongs to
+        
+        """
+        ldistrib = np.zeros(len(self.pos))
+        
+        for cID in range(self.nclusts):
+            inds = np.where(self.clusterIDs==cID)[0]
+            if len(inds) > 1:
+                if writegsd is not None:
+                    
+                    cIDpos = self.fixPBC(cID,cutoff,box,func,
+                                         writegsd+str(cID)+'.gsd')
+                else:
+                    
+                    cIDpos = self.fixPBC(cID,cutoff,box,func)
+                
+                endendl = np.sqrt(max(pdist(cIDpos[:,3*beadID:(3*beadID+3)],metric='sqeuclidean')))
+                
+                ldistrib[inds] = endendl
+        return ldistrib
+        
 class OpticalClusterSnapshot(ContactClusterSnapshot):
     """Class for tracking the location of optical clusters at each time step"""
     
@@ -1056,7 +1298,8 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
                                 + beadNo / molno,:]
             for m in range(nPairs):
                 
-                    aCOMs[moli*nPairs + m,:] = np.mean(aBeadsMol[compairs[m]],axis=0)
+                    aCOMs[moli*nPairs + m,:] = np.mean(aBeadsMol[compairs[m]],
+                                                       axis=0)
 
         return aCOMs
 
