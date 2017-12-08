@@ -6,15 +6,15 @@ RFOLD=/home/mansbac2/coarsegraining/patchy/analysis/low_concentration
 SFOLD="\'\/share\/scratch\/ramansbach\/coarsegraining\/hoomd\/patchy\/analyze"
 
 AAAS=(250 500 750)
-SCSCSCS=(02 2 4)
-BBBS=(025 050 075 125)
+SCSCSCS=(2 6 10)
+BBBS=(100 150 200)
 HOSTS=(0 1 2 3)
 HOSTI=0
 for i in `seq 0 2`; do
 	AAA=${AAAS[$i]}
 for j in `seq 0 2`; do
 	SCSCSC=${SCSCSCS[$j]}
-for k in `seq 0 3`; do
+for k in `seq 0 2`; do
 	BBB=${BBBS[$k]}
 	#BBB=06
 	CORES=4
@@ -28,6 +28,7 @@ for k in `seq 0 3`; do
 		sed -i "s/AAA/$AAA/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script
 		sed -i "s/SCSCSC/\'$SCSCSC\'/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script
 		sed -i "s/BBB/\'$BBB\'/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script
+		set -i "s/CUTOFF/$BBB/g" $RFOLD/$AAA-$SCSCSC-$BBB/$script"
 	done
 
 	sed "s/SSS/$SFOLD\/$AAA-$SCSCSC-$BBB\'/g" run-mpi-cutoff-test.sge > $RFOLD/$AAA-$SCSCSC-$BBB/run-mpi-cutoff-test.sge
