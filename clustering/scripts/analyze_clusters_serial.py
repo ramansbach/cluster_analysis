@@ -58,6 +58,7 @@ AAdlabel = AAA
 SCdlabel = SCSCSC
 BBdlabel = BBB
 dt = 1.0
+rank=0
 emax = 73.5
 estep = 0.147
 atype = u'LS'
@@ -66,14 +67,17 @@ colors = {'contact':'red','optical':'blue','aligned':'olive'}
 
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
         +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run'
-ldfname = None
+
 fnames = []
+ldfnames = []
 for i in range(runs):
     fname = op.join(data_path,fbase + str(i+1) + '.gsd')
     fnames.append(fname)
+    ldfname = op.join(data_path,fbase+'ldistrib'+str(i+1))
+    ldfnames.append(ldfname)
 start = time()    
 traj = gsd.hoomd.open(fname)
-box = traj[0].configuration.box
+box = traj[0].configuration.box[0:3]
 Systs = [cl.SnapSystem(traj,ats,molno,cutoff,
                        compairs=compairs,ttotal=ttotal,tstart=tstart,
                        atype=atype) for fname in fnames]
@@ -82,11 +86,16 @@ print("Time to setup clusters: ",end-start)
     
 
 #Find all cluster IDs     
-start = time()             
+start = time()
+lind = 0             
 for Syst in Systs:
-    Syst.get_clusters_serial('contact',box,lcompute=ldfname)
-    Syst.get_clusters_serial('optical',box,lcompute=ldfname)
-    Syst.get_clusters_serial('aligned',box,lcompute=ldfname)
+    ldfnameC = ldfnames[lind]+'_C.dat'
+    ldfnameO = ldfnames[lind]+'_O.dat'
+    ldfnameA = ldfnames[lind]+'_A.dat'
+    Syst.get_clusters_serial('contact',box,lcompute=ldfnameC)
+    Syst.get_clusters_serial('optical',box,lcompute=ldfnameO)
+    Syst.get_clusters_serial('aligned',box,lcompute=ldfnameA)
+    lind += 1
 end = time()
 print("Time to get clusters: ",end-start)
 

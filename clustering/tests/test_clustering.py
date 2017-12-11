@@ -181,8 +181,8 @@ def test_getComsAligned():
     """
     t = 910
 
-    inputfname = "/home/rachael/coarsegraining/hoomd/patchytest/analysis_testing/mols2.gsd"
-    traj = gsd.hoomd.open(inputfname)
+    inputfname = "mols2.gsd"
+    traj = gsd.hoomd.open(op.join(data_path,inputfname))
     ats = 6
     molno = 2
     
