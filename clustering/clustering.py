@@ -337,7 +337,10 @@ def fixCoords(pos,posinit,box):
 class SnapSystem(object):
     """Class for running the full suite of analysis software """
     
-    def __init__(self, traj, ats, molno, cldict, 
+    def __init__(self, traj, ats, molno, cldict,
+                 clfunc={'contact':conOptDistanceCython,
+                         'optical':conOptDistanceCython,
+                         'aligned':alignDistancesCython}, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
                  atype=u'LS',ttotal=-1,tstart=0):
         """ Initialize a full system of gsd snapshots over a trajectory.
@@ -355,6 +358,10 @@ class SnapSystem(object):
         cldict: dictionary
         keys are strings representing cluster types, ie contact, optical,
         aligned.  values are cutoffs
+    
+        clfunc: dictionary
+            keys are strings representing cluster types. values are
+            functions for distance computation
         
         compairs: numpy array
             for finding COM of aromatics for aligned clusters
@@ -414,6 +421,7 @@ class SnapSystem(object):
         self.ats = ats
         self.molno = molno
         self.cldict = cldict
+        self.clfunc = clfunc
         self.clsnaps = {}
         self.atype = atype
         if ttotal == -1:
@@ -601,13 +609,18 @@ class SnapSystem(object):
                     ind += 1
                 nind +=1
         
-    def get_clusters_serial(self,ctype):
+    def get_clusters_serial(self,ctype,box,lcompute=None):
         """ Compute the clusters in each snapshot of the trajectory, doing
         so simply in serial.
         Parameters
         ----------
         ctype: string
             cluster type (contact, optical, aligned, etc)
+        box: 3 x 1 numpy array
+            box side lengths
+        lcompute: string or None
+            if a string, this is the filename to write the length distributions
+            to after computation
         
         Raises
         ------
@@ -619,11 +632,22 @@ class SnapSystem(object):
                                        in get_clusters_serial.")
         clusters = self.clsnaps[ctype]
         cutoff = self.cldict[ctype]
-        
+        func = self.clfunc[ctype]
+        if lcompute is not None:
+            lfile = open(lcompute,'w')
         for clustSnap in clusters:
-            clustSnap.setClusterID(cutoff)
-        
+            BT = clustSnap.setClusterID(cutoff)
+            if lcompute is not None:
+                ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,
+                                                BT=BT)
+                for lmol in ldistrib:
+                    lfile.write('{0} '.format(lmol))
+                lfile.write('\n')
+        if lcompute is not None:
+            lfile.close()
         self.clsnaps[ctype] = clusters
+    
+    
         
     def get_clusters_from_file(self,ctype,fname):
         """ Compute the clusters in each snapshot of the trajectory from a
@@ -693,7 +717,8 @@ class SnapSystem(object):
         they are linear but curl up a lot. It fails for a spanning cluster.
 
         """
-
+        
+        
         if ctype not in self.cldict.keys():
             raise NotImplementedError("Unknown cluster type \
                                        in get_clusters_from_file.")
@@ -703,7 +728,8 @@ class SnapSystem(object):
         if writeldistrib is not None:
             f = open(writeldistrib,'w')
         for clustSnap in clusters:
-            ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,beadID,
+            
+            ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,
                                             writegsd=writegsd)
             ldistribt[ind,:] = ldistrib
             if writeldistrib is not None:
@@ -980,12 +1006,13 @@ class ContactClusterSnapshot(ClusterSnapshot):
 
         Returns
         -------
-        None, just sets clusterIDs
+        BT: BallTree of the system
         """        
-        (nclusts,clusterIDs) = \
+        (nclusts,clusterIDs,BT) = \
         self.getClusterID(self.pos,cutoff,conOptDistanceCython)
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
+        return BT
         
     def setClusterIDFromFile(self,fname):
         """
@@ -1009,7 +1036,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         f.close()
         line = self.timestep
         cIDs = lines[line].split()
-        self.clusterIDs = np.array([int(cID) for cID in cIDs])
+        self.clusterIDs = np.array([int(float(cID)) for cID in cIDs])
         
     def getClusterID(self, positions,cutoff,func):
         """
@@ -1024,6 +1051,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         -------
         clusterIDs: numpy array of the cluster index of the cluster that
         each molecule occupies
+        nclusts: number of clusters
+        BT: BallTree for possible other computations
 
         """
         
@@ -1033,7 +1062,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
                                             return_labels=True)
         
-        return (nclusts,clusterIDs)
+        return (nclusts,clusterIDs,BT)
     
     def idsToSizes(self):
         """
@@ -1051,7 +1080,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             clustSizes[cid] = dcounts[self.clusterIDs[cid]]
         return clustSizes
     
-    def fixPBC(self,cID,cutoff,box,func,writegsd=None):
+    def fixPBC(self,cID,cutoff,box,func,writegsd=None,BT=None):
         """
         return positions for a particular cluster fixed across PBCs for 
         calculation of structural metrics like end-to-end length
@@ -1069,10 +1098,13 @@ class ContactClusterSnapshot(ClusterSnapshot):
             box side lengths
         func: python function
             distance metric for BallTree computation
+        BT: precomputed BallTree for cluster
+            if this is none, recompute the BallTree
             
         Returns
         -------
         pos: numpy array of floats
+    
             the resultant positions of the cluster
         
         Notes
@@ -1087,8 +1119,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         
         fixedXYZ = positions.copy()
         potInds = range(1,int(sz[0]))
-        
-        BT = BallTree(positions,metric='pyfunc',func=func)
+        if BT is None:
+            BT = BallTree(positions,metric='pyfunc',func=func)
         fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
                                   box)
         correctInds = [0]
@@ -1116,8 +1148,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
             f.append(s)
         return fixedXYZ
 
-    def getLengthDistribution(self,cutoff,box,func,beadID,
-                              writegsd=None):
+    def getLengthDistribution(self,cutoff,box,func,
+                              writegsd=None,BT=None):
         """ Finds the end-to-end cluster length distribution
         
         Parameters
@@ -1128,36 +1160,39 @@ class ContactClusterSnapshot(ClusterSnapshot):
             box side lengths
         func: python function
             distance metric for BallTree computation
-        beadID: int
-            which bead is the central bead used in the computation of the 
-            fibril length
         writegsd: string or None
             used as the base filename to write out all clusters as separate
             gsd files. Mostly useful for debugging purposes.
+        BT: None or BallTree
+            BallTree for cluster computation
+            Recomputes if None
         Returns
         -------
         ldistrib: 1 x molno numpy array
             length of the cluster each molecule belongs to
         
         """
+        
         ldistrib = np.zeros(len(self.pos))
         
         for cID in range(self.nclusts):
+            
             inds = np.where(self.clusterIDs==cID)[0]
             if len(inds) > 1:
                 if writegsd is not None:
                     
                     cIDpos = self.fixPBC(cID,cutoff,box,func,
-                                         writegsd+str(cID)+'.gsd')
+                                         writegsd=writegsd+str(cID)+'.gsd',
+                                         BT=BT)
                 else:
                     
-                    cIDpos = self.fixPBC(cID,cutoff,box,func)
-                    sz = np.shape(cIDpos)
-                    #extract COM positions
-                    xcom = np.sum(cIDpos[:,range(0,sz[1],3)],axis=1)/(sz[1]/3.)
-                    ycom = np.sum(cIDpos[:,range(1,sz[1],3)],axis=1)/(sz[1]/3.)
-                    zcom = np.sum(cIDpos[:,range(2,sz[1],3)],axis=1)/(sz[1]/3.)
-                    cIDposcom = np.array([xcom,ycom,zcom])
+                    cIDpos = self.fixPBC(cID,cutoff,box,func,BT=BT)
+                sz = np.shape(cIDpos)
+                #extract COM positions
+                xcom = np.sum(cIDpos[:,range(0,sz[1],3)],axis=1)/(sz[1]/3.)
+                ycom = np.sum(cIDpos[:,range(1,sz[1],3)],axis=1)/(sz[1]/3.)
+                zcom = np.sum(cIDpos[:,range(2,sz[1],3)],axis=1)/(sz[1]/3.)
+                cIDposcom = np.array([xcom,ycom,zcom])
                 endendl = np.sqrt(max(pdist(cIDposcom.transpose(),metric='sqeuclidean')))
                 
                 ldistrib[inds] = endendl
@@ -1522,13 +1557,14 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
 
         Returns
         -------
-        None, just sets clusterIDs
+        BT: BallTree
+            for length computation
         """        
-        (nclusts,clusterIDs) = \
+        (nclusts,clusterIDs,BT) = \
         self.getClusterID(self.pos,cutoff,alignDistancesCython)
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
-    
+        return BT
 
 class ContactClusterSnapshotXTC(ContactClusterSnapshot):
     """ Class for tracking contact cluster locations that are initialized

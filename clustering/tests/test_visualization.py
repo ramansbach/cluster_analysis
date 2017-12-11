@@ -17,13 +17,13 @@ data_path = op.join(cl.__path__[0], 'data')
 def test_write_out_frame():
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
-    
+    box = traj[0].configuration.box
     ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
     syst = cl.SnapSystem(traj,ats,molno,cldict)
-    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('contact',box)
     syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
     cIDfile = op.join(data_path,'mols8cIDs.dat')
     cIDfile = open(cIDfile)

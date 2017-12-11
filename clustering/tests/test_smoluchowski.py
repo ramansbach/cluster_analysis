@@ -19,6 +19,7 @@ def test_getSizesFromFile():
     fname = 'molsdf4sizesAC'
     for i in range(1,6):
         traj = gsd.hoomd.open(op.join(data_path, tname+'_run'+str(i)+'.gsd'))
+        box = traj[0].configuration.box
         ats = {'aligned':6}
         cldict={'aligned':0.35*0.35}
         molno = 4
@@ -26,7 +27,7 @@ def test_getSizesFromFile():
         compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
         syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,
                              atype=atype)
-        syst.get_clusters_serial('aligned')
+        syst.get_clusters_serial('aligned',box)
         syst.writeSizes('aligned',op.join(data_path,fname + '_run' \
                         + str(i) + '.dat'))
     fnames = [op.join(data_path,fname + '_run1.dat'),
@@ -70,6 +71,7 @@ def test_linearFit():
     fname = 'molsdf4sizesAC'
     for i in range(1,6):
         traj = gsd.hoomd.open(op.join(data_path, tname+'_run'+str(i)+'.gsd'))
+        box = traj[0].configuration.box
         ats = {'aligned':6}
         cldict={'aligned':0.35*0.35}
         molno = 4
@@ -77,7 +79,7 @@ def test_linearFit():
         compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
         syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,
                              atype=atype)
-        syst.get_clusters_serial('aligned')
+        syst.get_clusters_serial('aligned',box)
         syst.writeSizes('aligned',op.join(data_path,fname + '_run' \
                         + str(i) + '.dat'))
     fnames = [op.join(data_path,fname + '_run1.dat'),

@@ -399,7 +399,8 @@ def test_get_clusters_serial():
     molno = 8
     cldict = {'contact':cutoff}
     syst = cl.SnapSystem(traj,ats,molno,cldict)
-    syst.get_clusters_serial('contact')
+    box = traj[0].configuration.box
+    syst.get_clusters_serial('contact',box)
     clustSizesActual = [[1,1,1,1,1,1,1,1],[1,2,2,1,3,3,1,3],[1,3,3,3,3,3,1,3],
                     [2,3,3,3,3,3,2,3],[5,5,5,5,3,3,5,3],[5,5,5,5,3,3,5,3],
                     [8,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8]]
@@ -416,15 +417,16 @@ def test_get_clusters_serial_full():
     """ 
     fname = 'dummyfull4.gsd'
     traj = gsd.hoomd.open(op.join(data_path,fname))
+    box = traj[0].configuration.box
     ats = {'contact':17,'optical':12,'aligned':6}
     molno = 4
     cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
     compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
     atype = 'AB'
     syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,atype=atype)
-    syst.get_clusters_serial('contact')
-    syst.get_clusters_serial('optical')
-    syst.get_clusters_serial('aligned')
+    syst.get_clusters_serial('contact',box)
+    syst.get_clusters_serial('optical',box)
+    syst.get_clusters_serial('aligned',box)
     cSizesActual = dict()
     cSizesActual['contact'] = [[1,1,1,1],[2,2,2,2],[4,4,4,4],
                           [4,4,4,4],[4,4,4,4],[4,4,4,4]]
@@ -453,8 +455,9 @@ def test_mu2vtime():
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
+    box = traj[0].configuration.box
     syst = cl.SnapSystem(traj,ats,molno,cldict)
-    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('contact',box)
     mu2vtime = syst.getMassAvVsTime('contact')
     assert np.shape(mu2vtime)[1] == len(traj)
     assert not (np.isnan(mu2vtime)).all()
@@ -465,13 +468,13 @@ def test_writeCID():
     """
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
-    
+    box = traj[0].configuration.box
     ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
     syst = cl.SnapSystem(traj,ats,molno,cldict)
-    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('contact',box)
     syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
     
 def test_readCID():
@@ -480,13 +483,13 @@ def test_readCID():
     """
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
-    
+    box = traj[0].configuration.box
     ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
     syst = cl.SnapSystem(traj,ats,molno,cldict)
-    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('contact',box)
     syst.writeCIDs('contact',op.join(data_path,'mols8cIDs.dat'))
     
     systwrit = cl.SnapSystem(traj,ats,molno,cldict)
@@ -520,15 +523,16 @@ def test_getLengthDistribution():
     """
     fname = 'dummyfull4.gsd'     
     traj = gsd.hoomd.open(op.join(data_path,fname))
+    box = traj[0].configuration.box
     ats = {'contact':17,'optical':12,'aligned':6}
     molno = 4
     cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
     compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
     atype = 'AB'
     syst = cl.SnapSystem(traj,ats,molno,cldict,compairs=compairs,atype=atype)
-    syst.get_clusters_serial('contact')
-    syst.get_clusters_serial('optical')
-    syst.get_clusters_serial('aligned')
+    syst.get_clusters_serial('contact',box)
+    syst.get_clusters_serial('optical',box)
+    syst.get_clusters_serial('aligned',box)
     box = traj[0].configuration.box[0:3]
     ldistribt = syst.getLengthDistribution('contact',cldict['contact'],box,0,
                                conOptDistanceCython)
@@ -539,20 +543,74 @@ def test_getLengthDistribution():
                                                       [3.08,3.08,3.08,3.08],
                                                       [1.93,1.93,1.93,1.93]]),
                                                       decimal=2)
+
+def test_clusters_and_length_serial():
+    """
+    test reusing the BallTree from cluster computation for the length
+    distribution computation
+    """
+    fname = 'mols8.gsd'
+    traj = gsd.hoomd.open(op.join(data_path, fname))
+    snap = traj[0]
+    box = snap.configuration.box[0:3]
+    ats = {'contact':17,'optical':12,'aligned':6}
+    cldict = {'contact':1.1*1.1,'optical':0.35*0.35,'aligned':0.35*0.35}
+    molno = 8
+
+    syst = cl.SnapSystem(traj,ats,molno,cldict)
+    syst.get_clusters_serial('contact',box,
+                             lcompute=op.join(data_path,'mols8CLdistrib.dat'))
+    syst.get_clusters_serial('optical',box,
+                             lcompute=op.join(data_path,'mols8OLdistrib.dat'))
+    syst.get_clusters_serial('aligned',box,
+                             lcompute=op.join(data_path,'mols8ALdistrib.dat'))
     
+    filecidbase = op.join(data_path,'mols8CIDs_')
+    fileszbase = op.join(data_path,'mols8sizes_')
+    syst.writeCIDs('contact',filecidbase+'C.dat')    
+    syst.writeSizes('contact',fileszbase+'C.dat')    
+    syst.writeCIDs('optical',filecidbase+'O.dat')    
+    syst.writeSizes('optical',fileszbase+'O.dat')    
+    syst.writeCIDs('aligned',filecidbase+'A.dat')    
+    syst.writeSizes('aligned',fileszbase+'A.dat')   
+    
+    lC = open(op.join(data_path,'mols8CLdistrib.dat'))
+    lO = open(op.join(data_path,'mols8OLdistrib.dat'))
+    lA = open(op.join(data_path,'mols8ALdistrib.dat'))
+    linesC = lC.readlines()
+    linesO = lO.readlines()
+    linesA = lA.readlines()
+    lC.close()
+    lO.close()
+    lA.close()
+
+    
+    flinesC = np.array([float(f) for f in linesC[len(linesC)-1].split()])
+    flinesO = np.array([float(f) for f in linesO[len(linesO)-1].split()])
+    flinesA = np.array([float(f) for f in linesA[len(linesA)-1].split()])
+    
+    npt.assert_array_almost_equal(flinesC,np.array([6.25,6.25,6.25,6.25,6.25,
+                                                     6.25,6.25,6.25]),
+                                                     decimal=2)
+    npt.assert_array_almost_equal(flinesO,np.array([0.,4.18,0.,4.18,4.18,
+                                                     4.18,4.18,4.18]),
+                                                     decimal=2)
+    npt.assert_array_almost_equal(flinesA,np.array([0.,0.,0.,1.03,0.98,0.,1.03,
+                                                     0.98]),
+                                                     decimal=2)
 def test_writeSizes():
     """
     test writing out the clusterIDs
     """
     fname = 'mols8.gsd'
     traj = gsd.hoomd.open(op.join(data_path, fname))
-    
+    box = traj[0].configuration.box
     ats = {'contact':17}
     cutoff= 1.1*1.1
     molno = 8
     cldict = {'contact':cutoff}
     syst = cl.SnapSystem(traj,ats,molno,cldict)
-    syst.get_clusters_serial('contact')
+    syst.get_clusters_serial('contact',box)
     syst.writeSizes('contact',op.join(data_path,'mols8sizes.dat'))
     
 def test_alignedDistance():
@@ -595,7 +653,7 @@ def test_alignedDistanceC():
                       1.,-1.,0.,2.,-1.,0.])
     d1 = alignDistancesCython(apos1,apos2)
     npt.assert_almost_equal(d1,1.5 * 1.5, 10)
-    
+
     
 if __name__ == "__main__":
     '''

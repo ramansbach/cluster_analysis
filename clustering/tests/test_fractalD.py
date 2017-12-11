@@ -103,7 +103,8 @@ def test_noisyL():
     npt.assert_approx_equal(l2.slope,as2,1)
     npt.assert_approx_equal(l1.intercept,ai1,1)
     npt.assert_approx_equal(l2.intercept,ai1+as1*x[ajunct] - as2 * x[ajunct],1)
-    
+
+
 def test_comparepy():
     """
     This reads in a set of test data, computes the correlation integral
@@ -111,14 +112,14 @@ def test_comparepy():
     comparepy.m 
     """
     for i in range(1,11):
-        f = open(data_path+'coords_'+str(i)+'.dat')
+        f = open(data_path2+'/coords_'+str(i)+'.dat')
         lines = f.readlines()
         f.close()
         coords = np.zeros([len(lines),3])
         for j in range(len(lines)):
             coords[j,:] = [float(s) for s in lines[j].split()]
-        cl.corrcalc(coords,22,0.1,fname=data_path+'cepy_'+str(i)+'.dat')
-'''
+        cl.corrcalc(coords,22,0.1,fname=data_path2+'/cepy_'+str(i)+'.dat')
+        '''
 def test_coms():
     """
     Attempting to sanity check/fix c-kernel computation of COM
@@ -142,7 +143,7 @@ def test_coms():
     comscpy = np.zeros([molno,3])
     comscpy = cl.getcomsPy(xtcSnap.pos,comscpy,masslist,ats,molno)
     npt.assert_array_almost_equal(comscpy,comspy)
-'''
+
 def test_compareMartini():
     """
     Checks that new code produces the same thing as the older Markov code
@@ -152,8 +153,8 @@ def test_compareMartini():
     estep = 0.1
     t = 400000
    
-
-    xtc = 'md_test.xtc'
+    #pdb.set_trace()
+    xtc = 'md_final.xtc'
     tpr = 'md_dummy.tpr'
     trj = op.join(data_path2,xtc)
     tpr = op.join(data_path2,tpr)
@@ -167,10 +168,10 @@ def test_compareMartini():
     xtcSnap = cl.ContactClusterSnapshotXTC(t, trj, tpr, outGro, ats, molno)
     comspy = cl.getCOMsPy(np.reshape(xtcSnap.pos,[1,3*ats*molno])[0],masslist,ats)
     comspy = np.reshape(comspy,[molno,3])
-    coms = getCOMs(xtcSnap.pos,masslist)
+    #coms = getCOMs(xtcSnap.pos,masslist)
     #pdb.set_trace()
     #npt.assert_array_almost_equal(coms,comspy)
-    cemat = cl.corrcalc(coms,emax,estep)
+    cemat = cl.corrcalc(comspy,emax,estep)
     olddata = 'test_cdim_400_snap.dat'
     olddata = op.join(data_path2,olddata)
     f = open(olddata)
@@ -182,4 +183,4 @@ def test_compareMartini():
         olddatamat[0,i] = olddata[i].split()[0]
         olddatamat[1,i] = olddata[i].split()[1]
     npt.assert_array_almost_equal(cemat,olddatamat)
-    
+    '''
