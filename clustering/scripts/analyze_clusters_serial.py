@@ -78,8 +78,7 @@ Systs = [cl.SnapSystem(traj,ats,molno,cutoff,
                        compairs=compairs,ttotal=ttotal,tstart=tstart,
                        atype=atype) for fname in fnames]
 end = time()
-if rank == 0:
-    print("Time to setup clusters: ",end-start)
+print("Time to setup clusters: ",end-start)
     
 
 #Find all cluster IDs     
@@ -89,25 +88,23 @@ for Syst in Systs:
     Syst.get_clusters_serial('optical',box,lcompute=ldfname)
     Syst.get_clusters_serial('aligned',box,lcompute=ldfname)
 end = time()
-if rank == 0:
-    print("Time to get clusters: ",end-start)
+print("Time to get clusters: ",end-start)
 
-if rank == 0:
-    run = 0
-    mu2s = {'contact':np.zeros([ttotal,runs]),
+run = 0
+mu2s = {'contact':np.zeros([ttotal,runs]),
             'optical':np.zeros([ttotal,runs]),
             'aligned':np.zeros([ttotal,runs])}
-    start = time()
-    for Syst in Systs:
-        for ctype in ['contact','optical','aligned']:
-            #write out cluster sizes and cluster IDs at each time step
-            cidName = fbase + 'cut'+str(cs[ctype]) + str(run+1) + ctype + '-CIDs.dat'
-            cszName = fbase + 'cut' + str(cs[ctype]) + str(run+1) + ctype + '-sizes.dat'
-            Syst.writeCIDs(ctype,op.join(save_path,cidName))
-            Syst.writeSizes(ctype,op.join(save_path,cszName))
-            #compute mass-averaged cluster size versus time
-            #pdb.set_trace()
+start = time()
+for Syst in Systs:
+    for ctype in ['contact','optical','aligned']:
+        #write out cluster sizes and cluster IDs at each time step
+        cidName = fbase + 'cut'+str(cs[ctype]) + str(run+1) + ctype + '-CIDs.dat'
+        cszName = fbase + 'cut' + str(cs[ctype]) + str(run+1) + ctype + '-sizes.dat'
+        Syst.writeCIDs(ctype,op.join(save_path,cidName))
+        Syst.writeSizes(ctype,op.join(save_path,cszName))
+        #compute mass-averaged cluster size versus time
+        #pdb.set_trace()
             
-        run += 1
-    end = time()
-    print("Time to write out clusters: ",end-start)
+    run += 1
+end = time()
+print("Time to write out clusters: ",end-start)
