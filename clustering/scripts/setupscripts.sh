@@ -19,7 +19,7 @@ for k in `seq 0 6`; do
 	#BBB=06
 	CORES=4
 	echo $AAA-$SCSCSC-$BBB
-	SCRIPTS=(gsdSubsample.py run-gsd-subsample.sge fractald_extract.py run-fd-extract.sge run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_clusters_serial.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge corrdim_timing.py run-corrdim-analyze.sge run-serial-cutoff-test.sge)
+	SCRIPTS=(analyze_length.py run-length-analyze.sge gsdSubsample.py run-gsd-subsample.sge fractald_extract.py run-fd-extract.sge run-held-cluster-analysis.sh analyze_clusters_MPI.py analyze_clusters_serial.py analyze_cut_mu2.py run-mu2-analyze.sge fix_misplaced_aroms.py run-misplaced-aroms.sge corrdim_timing.py run-corrdim-analyze.sge run-serial-cutoff-test.sge)
 	#if [ -e "$RFOLD/$AAA-$SCSCSCS-$BBB" ]
 	#then
 	echo "running $AAA-$SCSCSC-$BBB"
