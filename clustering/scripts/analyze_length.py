@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Fri Oct 13 07:55:15 2017
 
@@ -57,6 +56,7 @@ molnolabel = 10000
 AAdlabel = AAA
 SCdlabel = SCSCSC
 BBdlabel = BBB
+
 dt = 1.0
 rank=0
 emax = 73.5
@@ -85,38 +85,25 @@ end = time()
 if rank == 0:
     print("Time to setup clusters: ",end-start)
     
-
 #Find all cluster IDs     
 start = time()
 lind = 0             
 for Syst in Systs:
     ldfnameC = ldfnames[lind]+'_C.dat'
     ldfnameO = ldfnames[lind]+'_O.dat'
-    ldfnameA = ldfnames[lind]+'_A.dat'
-    Syst.get_clusters_serial('contact',box,lcompute=None)
-    Syst.get_clusters_serial('optical',box,lcompute=None)
-    Syst.get_clusters_serial('aligned',box,lcompute=None)
+    cidNameC = op.join(data_path,fbase + 'cut'+str(cs['contact']) + str(lind+1) + 'contact' + '-CIDs.dat')
+    cidNameO = op.join(data_path,fbase + 'cut'+str(cs['optical']) + str(lind+1) + 'optical' + '-CIDs.dat')
+    for Clsnap in Syst.clsnaps['contact']:
+        Clsnap.setClusterIDFromFile(cidNameC)
+    for Clsnap in Syst.clsnaps['optical']:
+        Clsnap.setClusterIDFromFile(cidNameO)
+    ldfname = op.join(data_path,fbase+'ldistrib'+str(lind+1))
+    Syst.getLengthDistribution('contact',cutoff['contact'],box,writegsd=None,
+                              writeldistrib=ldfname+'_C.dat')
+    Syst.getLengthDistribution('optical',cutoff['optical'],box,writegsd=None,
+                              writeldistrib=ldfname+'_O.dat')
+
     lind += 1
 end = time()
 if rank == 0:
-    print("Time to get clusters: ",end-start)
-
-if rank == 0:
-    run = 0
-    mu2s = {'contact':np.zeros([ttotal,runs]),
-            'optical':np.zeros([ttotal,runs]),
-            'aligned':np.zeros([ttotal,runs])}
-    start = time()
-    for Syst in Systs:
-        for ctype in ['contact','optical','aligned']:
-            #write out cluster sizes and cluster IDs at each time step
-            cidName = fbase + 'cut'+str(cs[ctype]) + str(run+1) + ctype + '-CIDs.dat'
-            cszName = fbase + 'cut' + str(cs[ctype]) + str(run+1) + ctype + '-sizes.dat'
-            Syst.writeCIDs(ctype,op.join(save_path,cidName))
-            Syst.writeSizes(ctype,op.join(save_path,cszName))
-            #compute mass-averaged cluster size versus time
-            #pdb.set_trace()
-            
-        run += 1
-    end = time()
-    print("Time to write out clusters: ",end-start)
+    print("Time to get length distributions: ",end-start)
