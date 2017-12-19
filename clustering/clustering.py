@@ -674,7 +674,7 @@ class SnapSystem(object):
         
         self.clsnaps[ctype] = clusters
         
-    def getLengthDistribution(self,ctype,cutoff,box,beadID,func,writegsd=None,
+    def getLengthDistribution(self,ctype,cutoff,box,func=conOptDistanceCython,writegsd=None,
                               writeldistrib=None):
         """ Gets the length distribution at each timestep and optionally
         writes it out to file.
@@ -689,14 +689,11 @@ class SnapSystem(object):
             box side lengths
         func: python function
             distance metric for BallTree computation
-        beadID: int
-            which bead is the central bead used in the computation of the 
-            fibril length
         writegsd: string or None
             used as the base filename to write out all clusters as separate
             gsd files. Mostly useful for debugging purposes.
         writeldistrib: string or None
-            the filename to write out the length distributionsof the clusters
+            the filename to write out the length distributions of the clusters
             
         Returns
         -------
@@ -1148,7 +1145,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             f.append(s)
         return fixedXYZ
 
-    def getLengthDistribution(self,cutoff,box,func,
+    def getLengthDistribution(self,cutoff,box,func=conOptDistanceCython,
                               writegsd=None,BT=None):
         """ Finds the end-to-end cluster length distribution
         
