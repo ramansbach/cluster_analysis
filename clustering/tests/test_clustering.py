@@ -534,7 +534,7 @@ def test_getLengthDistribution():
     syst.get_clusters_serial('optical',box)
     syst.get_clusters_serial('aligned',box)
     box = traj[0].configuration.box[0:3]
-    ldistribt = syst.getLengthDistribution('contact',cldict['contact'],box,0,
+    ldistribt = syst.getLengthDistribution('contact',cldict['contact'],box,
                                conOptDistanceCython)
     npt.assert_array_almost_equal(ldistribt,np.array([[0.,0.,0.,0.],
                                                       [2.92,2.92,1.22,1.22],
@@ -654,6 +654,22 @@ def test_alignedDistanceC():
     d1 = alignDistancesCython(apos1,apos2)
     npt.assert_almost_equal(d1,1.5 * 1.5, 10)
 
+def test_squashRNG():
+    """
+    test that squashing an RNG works correctly
+    """
+    rng = np.array([[1,1,1,0,0,0,1,1,0],
+                    [1,1,1,0,0,0,1,0,0],
+                    [1,1,1,0,0,0,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [1,1,0,0,0,0,1,1,1],
+                    [1,0,0,0,0,0,1,1,1],
+                    [0,0,0,0,0,0,1,1,1]])
+    rngS = cl.squashRNG(rng,3)
+    rngMini = np.array([[0,0,1],[0,0,0],[1,0,0]])
+    npt.assert_array_equal(rngMini,rngS.toarray())
     
 if __name__ == "__main__":
     '''

@@ -11,6 +11,7 @@ from sklearn.neighbors import radius_neighbors_graph
 from scipy.spatial.distance import cdist,pdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
+from scipy.sparse import csr_matrix,lil_matrix
 #from .due import due, Doi
 from .smoluchowski import massAvSize
 from mpi4py import MPI
@@ -19,7 +20,8 @@ __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
            "OpticalClusterSnapshot","AlignedClusterSnapshot",
            "ContactClusterSnapshotXTC","SnapSystem",
            "conOptDistance","conOptDistanceC","alignedDistance",
-           "alignedDistanceC","fixMisplacedArom"]
+           "alignedDistanceC","fixMisplacedArom","checkSymmetry",
+           "squashRNG"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -32,7 +34,57 @@ due.cite(Doi("10.1167/13.9.30"),
          path='clustering')
 '''
 
+def checkSymmetry(csr):
+    """
+    Checks whether a matrix in CSR sparse format is symmetric.
     
+    Parameters
+    ----------
+    csr: matrix in CSR format
+    
+    Returns
+    -------
+    symyes: bool
+        True if symmetric, False if not
+    """
+
+    symyes = not (csr!=csr.transpose()).max()
+    return symyes
+    
+def squashRNG(rng,apermol):
+    """
+    Reduces radius neighbors graph to a new graph based on molecules instead of
+    atoms.
+    
+    Parameters
+    ----------
+    rng: a graph in CSR format as produced by a BallTree
+    apermol: int
+        the number of atoms in a molecule
+        
+    Returns
+    -------
+    molrng: a new graph in CSR format
+    
+    Raises
+    ------
+    RuntimeError: if the original rng is not symmetric
+    
+    """
+    if not checkSymmetry(rng):
+        raise RuntimeError("Graph is non-symmetrical")
+    sh = rng.shape
+    newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
+    #pdb.set_trace()
+    molrng = lil_matrix(newsh)
+    
+    for i in range(0,newsh[0]):
+        for j in range(i+1,newsh[1]):
+            subrng = rng[apermol*i:apermol*(i+1),apermol*j:apermol*(j+1)]
+            if subrng.max():
+                molrng[i,j] = 1.0
+                molrng[j,i] = 1.0
+    return molrng
 
 
 def fixMisplacedArom(gsdfile,gsdout,idMiss,idPartner,idNotMiss,idNotPartner
@@ -1052,12 +1104,14 @@ class ContactClusterSnapshot(ClusterSnapshot):
         BT: BallTree for possible other computations
 
         """
-        
-        BT = BallTree(positions,metric='pyfunc',
-                                        func=func)
-        rng = radius_neighbors_graph(BT,cutoff)
+        sz = np.shape(positions)
+        pos3 = positions.reshape((int(sz[0]*sz[1]/3),3))
+        BT = BallTree(pos3,metric='euclidean')
+        rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
+        rng = squashRNG(rng,int(sz[1]/3))
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
-                                            return_labels=True)
+                                            return_labels=True,
+                                            connection='strong')
         
         return (nclusts,clusterIDs,BT)
     
@@ -1103,6 +1157,10 @@ class ContactClusterSnapshot(ClusterSnapshot):
         pos: numpy array of floats
     
             the resultant positions of the cluster
+            
+        Raises
+        ------
+        RuntimeError: if there is more than one connected component
         
         Notes
         -----
@@ -1116,17 +1174,24 @@ class ContactClusterSnapshot(ClusterSnapshot):
         
         fixedXYZ = positions.copy()
         potInds = range(1,int(sz[0]))
-        if BT is None:
-            BT = BallTree(positions,metric='pyfunc',func=func)
+        #if BT is None:
+        BT = BallTree(positions.reshape((int(sz[0]*sz[1]/3),3)),
+                                         metric='euclidean')
+        rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
+        rng = squashRNG(rng,int(sz[1]/3))
+        (nCC,CC) = connected_components(rng)
+        if nCC != 1:
+            raise RuntimeError("This isn't a fully connected cluster.")
         fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
                                   box)
         correctInds = [0]
         while len(correctInds) > 0:
             mol = correctInds.pop()
             
-            #pdb.set_trace()
-            neighs = BT.query_radius(positions[mol,:].reshape(1,-1),r=cutoff)[0]
+            
+            #neighs = BT.query_radius(positions[mol,:].reshape(1,-1),r=cutoff)[0]
             #neighs = neighs.remove(mol)
+            neighs = np.where(rng[mol,:].toarray()[0]==1)[0]
             for n in neighs:
                 #pdb.set_trace()
                 if n in potInds:
@@ -1562,6 +1627,32 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
         self.nclusts = nclusts
         self.clusterIDs = clusterIDs
         return BT
+        
+    def getClusterID(self, positions,cutoff,func):
+        """
+        Find the ID of which cluster each molecule is in
+
+        Parameters
+        ----------
+        cutoff: the squared distance molecules have to be within to be
+        part of the same cluster
+
+        Returns
+        -------
+        clusterIDs: numpy array of the cluster index of the cluster that
+        each molecule occupies
+        nclusts: number of clusters
+        BT: BallTree for possible other computations
+
+        """
+        
+        BT = BallTree(positions,metric='pyfunc',
+                                        func=func)
+        rng = radius_neighbors_graph(BT,cutoff)
+        (nclusts,clusterIDs) = connected_components(rng,directed=False,
+                                            return_labels=True)
+        
+        return (nclusts,clusterIDs,BT)
 
 class ContactClusterSnapshotXTC(ContactClusterSnapshot):
     """ Class for tracking contact cluster locations that are initialized
