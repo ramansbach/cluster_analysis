@@ -113,6 +113,7 @@ def squashRNGCython(rng,apermol):
     if not checkSymmetry(rng):
         raise RuntimeError("Graph is non-symmetrical")
     sh = rng.shape
+    pdb.set_trace()
     rng = rng.toarray()
     newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
     #pdb.set_trace()
