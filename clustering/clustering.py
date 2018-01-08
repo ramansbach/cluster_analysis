@@ -12,11 +12,12 @@ from sklearn.neighbors import radius_neighbors_graph
 from scipy.spatial.distance import cdist,pdist
 from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
-from scipy.sparse import csr_matrix,lil_matrix
+from scipy.sparse import csr_matrix,lil_matrix,coo_matrix
 #from .due import due, Doi
 from .smoluchowski import massAvSize
 from mpi4py import MPI
 from cdistances import conOptDistanceCython,alignDistancesCython,subsquashRNG
+from cdistances import squashRNGCOOCython
 
 
 __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
@@ -24,7 +25,8 @@ __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
            "ContactClusterSnapshotXTC","SnapSystem",
            "conOptDistance","conOptDistanceC","alignedDistance",
            "alignedDistanceC","fixMisplacedArom","checkSymmetry",
-           "squashRNG","squashRNGCython","squashRNGPy"]
+           "squashRNG","squashRNGCython","squashRNGPy","squashRNGCOO",
+           "squashRNGCOOCython"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -88,6 +90,49 @@ def squashRNG(rng,apermol):
             if subrng.max():
                 molrng[i,j] = 1.0
                 molrng[j,i] = 1.0
+    return csr_matrix(molrng)
+    
+def squashRNGCOO(rng,apermol):
+    """
+    Reduces radius neighbors graph to a new graph based on molecules instead of
+    atoms.
+    Uses COO format
+    
+    Parameters
+    ----------
+    rng: a graph in CSR format as produced by a BallTree
+    apermol: int
+        the number of atoms in a molecule
+        
+    Returns
+    -------
+    molrng: a new graph in CSR format
+    
+    Raises
+    ------
+    RuntimeError: if the original rng is not symmetric
+    
+    """
+    if not checkSymmetry(rng):
+        raise RuntimeError("Graph is non-symmetrical")
+    sh = rng.shape
+    newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
+    molrng = lil_matrix(newsh)
+    rng = coo_matrix(rng)
+    rows = rng.row//apermol
+    cols = rng.col//apermol
+    rowcols = rows * molrng.shape[1] + cols
+    urowcols = np.unique(rowcols)
+    rows = urowcols // molrng.shape[1]
+    cols = urowcols % molrng.shape[1]
+    #pdb.set_trace()
+    for i in range(len(rows)):
+
+        row = rows[i]
+        col = cols[i]
+        if col > row:
+            molrng[row,col] = 1
+    #pdb.set_trace()
     return csr_matrix(molrng)
 
 def squashRNGCython(rng,apermol):
@@ -1224,11 +1269,11 @@ class ContactClusterSnapshot(ClusterSnapshot):
         pos3 = positions.reshape((int(sz[0]*sz[1]/3),3))
         BT = BallTree(pos3,metric='euclidean')
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
-        rng = squashRNGCython(rng,int(sz[1]/3))
+        rng = squashRNGCOOCython(rng,int(sz[1]/3))
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
                                             return_labels=True,
-                                            connection='strong')
-        
+                                            connection='weak')
+        #pdb.set_trace()
         return (nclusts,clusterIDs,BT)
     
     def idsToSizes(self):
@@ -1294,8 +1339,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         BT = BallTree(positions.reshape((int(sz[0]*sz[1]/3),3)),
                                          metric='euclidean')
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
-        rng = squashRNGCython(rng,int(sz[1]/3))
-        (nCC,CC) = connected_components(rng)
+        rng = squashRNGCOOCython(rng,int(sz[1]/3))
+        (nCC,CC) = connected_components(rng,connection='weak')
         if nCC != 1:
             raise RuntimeError("This isn't a fully connected cluster.")
         fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
