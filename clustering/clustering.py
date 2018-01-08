@@ -688,6 +688,7 @@ class SnapSystem(object):
         if lcompute is not None:
             lfile = open(lcompute,'w')
         for clustSnap in clusters:
+	    pdb.set_trace()
             BT = clustSnap.setClusterID(cutoff)
             if lcompute is not None:
                 ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,
@@ -1104,6 +1105,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         BT: BallTree for possible other computations
 
         """
+	pdb.set_trace()
         sz = np.shape(positions)
         pos3 = positions.reshape((int(sz[0]*sz[1]/3),3))
         BT = BallTree(pos3,metric='euclidean')
@@ -1112,7 +1114,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
                                             return_labels=True,
                                             connection='strong')
-        
+        pdb.set_trace()
         return (nclusts,clusterIDs,BT)
     
     def idsToSizes(self):
@@ -1181,6 +1183,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         rng = squashRNG(rng,int(sz[1]/3))
         (nCC,CC) = connected_components(rng)
         if nCC != 1:
+            pdb.set_trace()
             raise RuntimeError("This isn't a fully connected cluster.")
         fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
                                   box)
