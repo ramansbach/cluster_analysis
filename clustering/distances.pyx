@@ -12,8 +12,10 @@ cdef extern double conoptdistance ( double * x, double * y, int ats)
 cdef extern double aligndistance ( double * dists, double * distsA, 
                                   double * distsB, double * x, double * y,
                                   int ats)
-@cython.boundscheck(False)
-@cython.wraparound(False)
+cdef extern void subsquashrng ( double ** rng, double ** molrng, int dim,
+                               int apermol)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
 def conOptDistanceCython(np.ndarray[double,ndim=1,mode="c"] x not None,np.ndarray[double,ndim=1,mode="c"] y not None):
     
     if len(x) % 3 != 0 or len(y) % 3 != 0:
@@ -35,3 +37,9 @@ def alignDistancesCython(np.ndarray[double,ndim=1,mode="c"] x not None,np.ndarra
     mind3 = aligndistance(&dists[0],&distsA[0],&distsB[0],&x[0],&y[0],ats)
     return mind3
     
+def subsquashRNG(np.ndarray[double,ndim=2,mode="c"] rng not None,
+                 np.ndarray[double,ndim=2,mode="c"] molrng not None
+                 int apermol):
+    cdef int dim = int(np.shape(molrng)[0])
+    
+    subsquashrng(&rng[0],&molrng[0],dim,apermol)

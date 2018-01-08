@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 import numpy as np
 import pandas as pd
 import gsd.hoomd
@@ -15,13 +16,15 @@ from scipy.sparse import csr_matrix,lil_matrix
 #from .due import due, Doi
 from .smoluchowski import massAvSize
 from mpi4py import MPI
-from cdistances import conOptDistanceCython,alignDistancesCython
+from cdistances import conOptDistanceCython,alignDistancesCython,subsquashRNG
+
+
 __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
            "OpticalClusterSnapshot","AlignedClusterSnapshot",
            "ContactClusterSnapshotXTC","SnapSystem",
            "conOptDistance","conOptDistanceC","alignedDistance",
            "alignedDistanceC","fixMisplacedArom","checkSymmetry",
-           "squashRNG"]
+           "squashRNG","squashRNGCython","squashRNGPy"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -74,19 +77,131 @@ def squashRNG(rng,apermol):
     if not checkSymmetry(rng):
         raise RuntimeError("Graph is non-symmetrical")
     sh = rng.shape
+    rng = rng.toarray()
     newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
     #pdb.set_trace()
-    molrng = lil_matrix(newsh)
-    
+    #molrng = lil_matrix(newsh)
+    molrng = np.zeros(newsh)
     for i in range(0,newsh[0]):
         for j in range(i+1,newsh[1]):
             subrng = rng[apermol*i:apermol*(i+1),apermol*j:apermol*(j+1)]
             if subrng.max():
                 molrng[i,j] = 1.0
                 molrng[j,i] = 1.0
+    return csr_matrix(molrng)
+
+def squashRNGCython(rng,apermol):
+    """
+    Reduces radius neighbors graph to a new graph based on molecules instead of
+    atoms, but uses Cython code to improve speed.
+    
+    Parameters
+    ----------
+    rng: a graph in CSR format as produced by a BallTree
+    apermol: int
+        the number of atoms in a molecule
+        
+    Returns
+    -------
+    molrng: a new graph in CSR format
+    
+    Raises
+    ------
+    RuntimeError: if the original rng is not symmetric
+    
+    """
+    if not checkSymmetry(rng):
+        raise RuntimeError("Graph is non-symmetrical")
+    sh = rng.shape
+    rng = rng.toarray()
+    newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
+    #pdb.set_trace()
+    #molrng = lil_matrix(newsh)
+    molrng = np.zeros(newsh)
+   
+    molrng = subsquashRNG(rng,molrng,apermol)
+
+                
+    return csr_matrix(molrng)
+    
+
+def squashRNGPy(rng,apermol):
+    """
+    Reduces radius neighbors graph to a new graph based on molecules instead of
+    atoms.  Dummy python debug test of Cython algorithm.
+    
+    Parameters
+    ----------
+    rng: a graph in CSR format as produced by a BallTree
+    apermol: int
+        the number of atoms in a molecule
+        
+    Returns
+    -------
+    molrng: a new graph in CSR format
+    
+    Raises
+    ------
+    RuntimeError: if the original rng is not symmetric
+    
+    """
+    if not checkSymmetry(rng):
+        raise RuntimeError("Graph is non-symmetrical")
+    sh = rng.shape
+    rng = rng.toarray()
+    newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
+    #pdb.set_trace()
+    #molrng = lil_matrix(newsh)
+    molrng = np.zeros(newsh)
+
+    molrng = subsquashRNGPy(rng,molrng,apermol)
+
+   #pdb.set_trace()
+    return csr_matrix(molrng)  
+    
+def subsquashRNGPy(rng,molrng,apermol):
+    """
+    Python version of c algorithm that sets the block to 0 when all are 0
+    and 1 if at least 1 is 1
+    
+     Parameters
+    ----------
+    rng: a numpy array as produced by a BallTree
+    apermol: int
+        the number of atoms in a molecule
+        
+    Returns
+    -------
+    molrng: a new graph
+    """
+    dim = np.shape(molrng)[0]
+    sz = np.shape(rng)
+    rng = rng.reshape((1,sz[0]*sz[1]))[0]
+    molrng = molrng.reshape((1,dim*dim))[0]
+
+
+    for i in range(dim):
+        for j in range(i+1,dim):
+            istart = apermol*i;
+            iend = apermol*(i+1);
+            jstart = apermol*j;
+            jend = apermol*(j+1);
+            curr = 0;
+            #pdb.set_trace()
+            for k in range(istart,iend):
+                for m in range(jstart,jend):
+                    if (rng[k*dim*apermol+m] != 0.):
+                        curr = 1;
+            #pdb.set_trace()                        
+
+            if (curr == 1):
+                molrng[dim*i+j] = 1.0;
+                molrng[dim*j+i] = 1.0;
+                        
+    molrng = molrng.reshape((dim,dim))
     return molrng
-
-
+ 
+    
 def fixMisplacedArom(gsdfile,gsdout,idMiss,idPartner,idNotMiss,idNotPartner
                     ,molno,ats,ts):
     """
@@ -1108,7 +1223,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         pos3 = positions.reshape((int(sz[0]*sz[1]/3),3))
         BT = BallTree(pos3,metric='euclidean')
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
-        rng = squashRNG(rng,int(sz[1]/3))
+        rng = squashRNGCython(rng,int(sz[1]/3))
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
                                             return_labels=True,
                                             connection='strong')
@@ -1178,7 +1293,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         BT = BallTree(positions.reshape((int(sz[0]*sz[1]/3),3)),
                                          metric='euclidean')
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
-        rng = squashRNG(rng,int(sz[1]/3))
+        rng = squashRNGCython(rng,int(sz[1]/3))
         (nCC,CC) = connected_components(rng)
         if nCC != 1:
             raise RuntimeError("This isn't a fully connected cluster.")

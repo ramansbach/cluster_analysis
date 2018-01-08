@@ -6,6 +6,8 @@ import pdb
 import gsd.hoomd
 import sys
 import clustering as cl
+import random
+import scipy
 #from context import clustering as cl
 #from context import smoluchowski as smol
 from cdistances import conOptDistanceCython,alignDistancesCython
@@ -667,10 +669,73 @@ def test_squashRNG():
                     [1,1,0,0,0,0,1,1,1],
                     [1,0,0,0,0,0,1,1,1],
                     [0,0,0,0,0,0,1,1,1]])
+    rng = scipy.sparse.csr_matrix(rng)
     rngS = cl.squashRNG(rng,3)
     rngMini = np.array([[0,0,1],[0,0,0],[1,0,0]])
     npt.assert_array_equal(rngMini,rngS.toarray())
+
+def test_squashRNGCython():
+    """
+    test that squashing an RNG works correctly
+    """
+    rng = np.array([[1,1,1,0,0,0,1,1,0],
+                    [1,1,1,0,0,0,1,0,0],
+                    [1,1,1,0,0,0,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [1,1,0,0,0,0,1,1,1],
+                    [1,0,0,0,0,0,1,1,1],
+                    [0,0,0,0,0,0,1,1,1]]).astype(float)
+    rng = scipy.sparse.csr_matrix(rng)
+    rngS = cl.squashRNGCython(rng,3)
+    rngMini = np.array([[0,0,1],[0,0,0],[1,0,0]])
+    npt.assert_array_equal(rngMini,rngS.toarray())
     
+def test_squashRNGPython():
+    """
+    test that squashing an RNG works correctly
+    """
+    rng = np.array([[1,1,1,0,0,0,1,1,0],
+                    [1,1,1,0,0,0,1,0,0],
+                    [1,1,1,0,0,0,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [1,1,0,0,0,0,1,1,1],
+                    [1,0,0,0,0,0,1,1,1],
+                    [0,0,0,0,0,0,1,1,1]]).astype(float)
+    rng = scipy.sparse.csr_matrix(rng)
+    rngS = cl.squashRNGPy(rng,3)
+    rngMini = np.array([[0,0,1],[0,0,0],[1,0,0]])
+    npt.assert_array_equal(rngMini,rngS.toarray())
+"""
+def test_valid_metric():
+    loop = 10
+    for j in range(loop):
+        ln = 5#random.randint(3,50)
+        ln = 3*ln
+        x = np.zeros(ln)
+        y = np.zeros(ln)
+        z = np.zeros(ln)
+        a = -100
+        b = 100
+        for i in range(ln):
+            x[i] = random.uniform(a,b)
+            y[i] = random.uniform(a,b)
+            z[i] = random.uniform(a,b)
+        try:
+            assert cl.conOptDistance(x,y) >= 0
+            assert cl.conOptDistance(x,x) == 0
+            assert cl.conOptDistance(y,y) == 0
+            if (x != y).any():
+                assert cl.conOptDistance(x,y) != 0
+            else:
+                assert cl.conOptDistance(x,y) == 0
+            assert cl.conOptDistance(x,y) + cl.conOptDistance(y,z) >= cl.conOptDistance(x,z)
+        except AssertionError:
+            pdb.set_trace()
+"""
 if __name__ == "__main__":
     '''
     test_get_clusters_serial_full()
