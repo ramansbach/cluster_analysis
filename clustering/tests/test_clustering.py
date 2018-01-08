@@ -709,6 +709,42 @@ def test_squashRNGPython():
     rngS = cl.squashRNGPy(rng,3)
     rngMini = np.array([[0,0,1],[0,0,0],[1,0,0]])
     npt.assert_array_equal(rngMini,rngS.toarray())
+    
+def test_squashRNGCOO():
+    """
+    test that squashing an RNG works correctly
+    """
+    rng = np.array([[1,1,1,0,0,0,1,1,0],
+                    [1,1,1,0,0,0,1,0,0],
+                    [1,1,1,0,0,0,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [1,1,0,0,0,0,1,1,1],
+                    [1,0,0,0,0,0,1,1,1],
+                    [0,0,0,0,0,0,1,1,1]]).astype(float)
+    rng = scipy.sparse.csr_matrix(rng)
+    rngS = cl.squashRNGCOO(rng,3)
+    rngMini = np.array([[0,0,1],[0,0,0],[0,0,0]])
+    npt.assert_array_equal(rngMini,rngS.toarray())
+
+def test_squashRNGCOOCython():
+    """
+    test that squashing an RNG works correctly
+    """
+    rng = np.array([[1,1,1,0,0,0,1,1,0],
+                    [1,1,1,0,0,0,1,0,0],
+                    [1,1,1,0,0,0,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [0,0,0,1,1,1,0,0,0],
+                    [1,1,0,0,0,0,1,1,1],
+                    [1,0,0,0,0,0,1,1,1],
+                    [0,0,0,0,0,0,1,1,1]]).astype(float)
+    rng = scipy.sparse.csr_matrix(rng)
+    rngS = cl.squashRNGCOOCython(rng,3)
+    rngMini = np.array([[0,0,1],[0,0,0],[0,0,0]])
+    npt.assert_array_equal(rngMini,rngS.toarray())
 """
 def test_valid_metric():
     loop = 10
