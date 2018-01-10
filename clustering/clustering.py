@@ -158,7 +158,7 @@ def squashRNGCython(rng,apermol):
     if not checkSymmetry(rng):
         raise RuntimeError("Graph is non-symmetrical")
     sh = rng.shape
-    pdb.set_trace()
+    #pdb.set_trace()
     rng = rng.toarray()
     newsh = (int(sh[0]/apermol),int(sh[1]/apermol))
     #pdb.set_trace()
@@ -787,11 +787,9 @@ class SnapSystem(object):
                                                        molno,atype=atype)
                
                 clustSnap.setClusterID(cutoff)
-                try:
-                    carray_local[carraylen * i : (carraylen * i + carraylen)]\
-                    = clustSnap.toArray()
-                except:
-                    pdb.set_trace()
+                
+                carray_local[carraylen * i : (carraylen * i + carraylen)]\
+                = clustSnap.toArray()
             #print("Part 2: From rank {0}, snap {1}, array{2}".format(rank,i,carrayi))
         self.comm.Barrier()
         self.comm.Gather(carray_local,clusterarray,root=0)
@@ -1224,7 +1222,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         self.clusterIDs = clusterIDs
         return BT
         
-    def setClusterIDFromFile(self,fname):
+    def setClusterIDFromFile(self,fname,line=None):
         """
         Set the cluster IDs by opening a file and checking what they are
         
@@ -1232,6 +1230,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         ----------
         fname: string
             the name of the file that contains the clusterIDs
+        line: int
+	    the line number if it differs from the timestep of the cluster snap
         
         Returns
         -------
@@ -1244,7 +1244,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         f = open(fname)
         lines = f.readlines()
         f.close()
-        line = self.timestep
+        if line is None:
+            line = self.timestep
         cIDs = lines[line].split()
         self.clusterIDs = np.array([int(float(cID)) for cID in cIDs])
         
@@ -1341,7 +1342,9 @@ class ContactClusterSnapshot(ClusterSnapshot):
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
         rng = squashRNGCOOCython(rng,int(sz[1]/3))
         (nCC,CC) = connected_components(rng,connection='weak')
+        
         if nCC != 1:
+            #pdb.set_trace()
             raise RuntimeError("This isn't a fully connected cluster.")
         fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
                                   box)
@@ -1732,8 +1735,6 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
                     comloc = aBeadsMol[compairs[m][1]]+cv/2
                     #comloc = np.mean(aBeadsMol[compairs[m]],axis=0)
                     #pdb.set_trace()
-                if np.isclose(comloc,np.array([9.360982,-1.270450,1.375538])).all():
-                    pdb.set_trace()
                 aCOMs[moli*nPairs + m,:] = comloc
 
         return aCOMs       
