@@ -555,7 +555,7 @@ class SnapSystem(object):
                          'optical':conOptDistanceCython,
                          'aligned':alignDistancesCython}, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
-                 atype=u'LS',ttotal=-1,tstart=0):
+                 atype=u'LS',ttotal=-1,tstart=0,mpibool=False):
         """ Initialize a full system of gsd snapshots over a trajectory.
 
         Parameters
@@ -589,6 +589,9 @@ class SnapSystem(object):
         tstart: int
             timestep to start at, defaults to zero 
             (last timestep = tstart + ttotal)
+
+	mpibool: bool
+	    whether to run in MPI, defaults to false
         
         Attributes
         ----------
@@ -623,11 +626,7 @@ class SnapSystem(object):
         size = comm.Get_size()
         rank = comm.Get_rank()
         self.comm = comm
-
-        if size > 1:
-            self.mpi = True
-        else:
-            self.mpi = False
+	self.mpi = mpibool
         
         
         self.trajectory = traj
@@ -846,7 +845,10 @@ class SnapSystem(object):
         func = self.clfunc[ctype]
         if lcompute is not None:
             lfile = open(lcompute,'w')
+        snapind = 1
         for clustSnap in clusters:
+            print("Getting cluster {0}\n".format(snapind))
+	    snapind+=1
             BT = clustSnap.setClusterID(cutoff)
             if lcompute is not None:
                 ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,

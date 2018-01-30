@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 import pdb
 save_path = SSS
 data_path=save_path
+#data_path = '/data/mansbac2/coarsegraining/patchy/fulltraj'
 #Matlab setup
 
 plt.ioff()
@@ -39,9 +40,9 @@ font = {'weight' : 'bold',
 matplotlib.rc('font', **font)
 
 
-runs = 1
+runs = 5
 
-ttotal = 799
+ttotal = 999
 tstart = 0
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
@@ -78,7 +79,7 @@ for i in range(runs):
 start = time()    
 traj = gsd.hoomd.open(fname)
 box = traj[0].configuration.box[0:3]
-Systs = [cl.SnapSystem(traj,ats,molno,cutoff,
+Systs = [cl.SnapSystem(gsd.hoomd.open(fname),ats,molno,cutoff,
                        compairs=compairs,ttotal=ttotal,tstart=tstart,
                        atype=atype) for fname in fnames]
 end = time()
@@ -94,7 +95,7 @@ for Syst in Systs:
     ldfnameA = ldfnames[lind]+'_A.dat'
     Syst.get_clusters_serial('contact',box,lcompute=None)
     Syst.get_clusters_serial('optical',box,lcompute=None)
-    Syst.get_clusters_serial('aligned',box,lcompute=None)
+    #Syst.get_clusters_serial('aligned',box,lcompute=None)
     lind += 1
 end = time()
 print("Time to get clusters: ",end-start)
@@ -105,7 +106,7 @@ mu2s = {'contact':np.zeros([ttotal,runs]),
             'aligned':np.zeros([ttotal,runs])}
 start = time()
 for Syst in Systs:
-    for ctype in ['contact','optical','aligned']:
+    for ctype in ['contact','optical']:
         #write out cluster sizes and cluster IDs at each time step
         cidName = fbase + 'cut'+str(cs[ctype]) + str(run+1) + ctype + '-CIDs.dat'
         cszName = fbase + 'cut' + str(cs[ctype]) + str(run+1) + ctype + '-sizes.dat'

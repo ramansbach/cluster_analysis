@@ -2,19 +2,19 @@
 #All this script does currently is drops the analyze scripts into the correct folder with the correct templated values
 #it can loop over multiple values to set up multiple scripts
 
-RFOLD=/home/mansbac2/coarsegraining/patchy/analysis/low_concentration
-SFOLD="\'\/share\/scratch\/ramansbach\/coarsegraining\/hoomd\/patchy\/analyze"
+RFOLD=/home/mansbac2/coarsegraining/patchy/analysis/production_runs
+SFOLD="\'\/share\/scratch\/ramansbach\/coarsegraining\/hoomd\/patchy\/analyze\/production_runs"
 
 AAAS=(250 500 750)
-SCSCSCS=(02 2 4 6 10)
-BBBS=(025 050 075 100 125 150 200)
-HOSTS=(0 1 2 3)
+SCSCSCS=(02 2 6 10)
+BBBS=(100 125 150 175)
+HOSTS=(0 3 4 5)
 HOSTI=0
 for i in `seq 0 2`; do
 	AAA=${AAAS[$i]}
-for j in `seq 0 4`; do
+for j in `seq 0 3`; do
 	SCSCSC=${SCSCSCS[$j]}
-for k in `seq 0 6`; do
+for k in `seq 0 3`; do
 	BBB=${BBBS[$k]}
 	#BBB=06
 	CORES=4

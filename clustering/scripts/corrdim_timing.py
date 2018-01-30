@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 #compute corrdims for final frame for each run
 import pdb
 save_path=SSS
-data_path=save_path
+#data_path=save_path
+data_path = '/data/mansbac2/coarsegraining/patchy/fulltraj'
 #Matlab setup
 
 plt.ioff()
@@ -24,7 +25,7 @@ font = {'weight' : 'bold',
         'size'   : 22}
 
 matplotlib.rc('font', **font)
-runs = 1
+runs = 5
 
 ats = {'contact':17,'optical':12,'aligned':6}
 #molno = 4
@@ -36,13 +37,13 @@ dt = 1.0
 emax = 294
 estep = 0.147
 tstart = 10
-tmax = 799
-tskip = 100
+tmax = 1999
+tskip = 200
 #atype = 'AB'
 combeadtype = 'E'
 markers = ['o','x','^','v','s']
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
-        +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run'
+        +str(SCdlabel)+'-'+str(BBdlabel)+'_run'
 framets = range(tstart,tmax,tskip)
 fnames = []
 for i in range(runs):
