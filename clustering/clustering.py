@@ -1335,6 +1335,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         positions = self.pos[inds,:]
         sz = np.shape(positions)
         
+        #pdb.set_trace()
         
         fixedXYZ = positions.copy()
         potInds = range(1,int(sz[0]))
@@ -1358,6 +1359,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             #neighs = BT.query_radius(positions[mol,:].reshape(1,-1),r=cutoff)[0]
             #neighs = neighs.remove(mol)
             neighs = np.where(rng[mol,:].toarray()[0]==1)[0]
+	    #pdb.set_trace()
             for n in neighs:
                 #pdb.set_trace()
                 if n in potInds:
@@ -1374,6 +1376,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             s.particles.position = fixedXYZ
             s.configuration.box = np.concatenate((box,[0,0,0]))
             f.append(s)
+        #pdb.set_trace()
         return fixedXYZ
 
     def getLengthDistribution(self,cutoff,box,func=conOptDistanceCython,
@@ -1408,7 +1411,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             inds = np.where(self.clusterIDs==cID)[0]
             if len(inds) > 1:
                 if writegsd is not None:
-                    
+                    #pdb.set_trace()
                     cIDpos = self.fixPBC(cID,cutoff,box,func,
                                          writegsd=writegsd+str(cID)+'.gsd',
                                          BT=BT)
