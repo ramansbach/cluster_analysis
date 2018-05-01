@@ -29,8 +29,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pdb
 save_path = SSS
-data_path=save_path
-#data_path = '/data/mansbac2/coarsegraining/patchy/fulltraj'
+#data_path=save_path
+data_path = '/data/mansbac2/coarsegraining/patchy/fulltraj'
 #Matlab setup
 
 plt.ioff()

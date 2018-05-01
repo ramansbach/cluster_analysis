@@ -6,14 +6,13 @@
 
 #$ -m abe                   # email on abort, begin, and end
 #$ -M mansbac2@illinois.edu      # email address
-#$ -o len-AAA-SCSCSC-BBB.log
-#$ -N len-AAA-SCSCSC-BBB            # job name
+#$ -o ccc-AAA-SCSCSC-BBB.log
+#$ -N ccc-AAA-SCSCSC-BBB            # job name
 #$ -j y
 #$ -q all.q                 # queue name
 #$ -pe orte 1             # parallel environment & # cores
-##$ -l h_vmem=44G
 ##$ -l h_rt=00:10:00        # run time (hh:mm:ss)
-#$ -l hostname=compute-0-2
+##$ -l hostname=compute-0-0
 
 echo " "
 echo "-------------------"
@@ -34,7 +33,18 @@ echo "-------------------"
 echo " "
 
 cd $SGE_O_WORKDIR
-python analyze_length.py
+
+
+
+for i in `seq 210 200 1810`; do
+	FIN5=/share/scratch/ramansbach/coarsegraining/hoomd/patchy/analyze/production_runs/AAA-SCSCSC-BBB/mols10000_AAA-SCSCSC-BBB_run-corrcalc$i\.dat
+	FIN1=/share/scratch/ramansbach/coarsegraining/hoomd/patchy/analyze/production_runs/AAA-SCSCSC-BBB/mols10000_AAA-SCSCSC-BBB_short_run-corrcalc-first-run$i\.dat
+	FOUT=/share/scratch/ramansbach/coarsegraining/hoomd/patchy/analyze/production_runs/AAA-SCSCSC-BBB/corrcalctemp.dat
+	python correctCorrCalcData.py $FIN5 $FIN1 $FOUT
+	mv $FIN5 /share/scratch/ramansbach/coarsegraining/hoomd/patchy/analyze/production_runs/AAA-SCSCSC-BBB/mols10000_AAA-SCSCSC-BBB_run-corrcalc$i\_backup.dat
+	mv $FOUT $FIN5
+done
+
 echo " "
 echo "This job is DONE!"
 echo " "

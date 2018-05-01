@@ -12,7 +12,7 @@
 #$ -q all.q                 # queue name
 #$ -pe orte 1             # parallel environment & # cores
 ##$ -l h_rt=00:10:00        # run time (hh:mm:ss)
-#$ -l hostname=compute-0-HOST
+#$ -l hostname=compute-0-2
 
 echo " "
 echo "-------------------"

@@ -938,7 +938,7 @@ class SnapSystem(object):
         if writeldistrib is not None:
             f = open(writeldistrib,'w')
         for clustSnap in clusters:
-            
+            print("Getting ldistrib for {0}\n".format(ind))    
             ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,
                                             writegsd=writegsd)
             ldistribt[ind,:] = ldistrib
@@ -1481,8 +1481,10 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
             self.clusterIDs = carray[pend:len(carray)]
         else:
             if t != -1: 
+                #try:
                 snapshot = trajectory[t]
-                
+                #except MemoryError:
+                    #print("MemoryError at t={0}\n".format(t))
                 
                 #self.pos = self.getComs(compairs,atype,trajectory[t],molno)
                 tind = snapshot.particles.types.index(atype)

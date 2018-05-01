@@ -29,9 +29,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pdb
-#data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
+data_path = '/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/data'
 save_path=SSS
-data_path=save_path
+#data_path=save_path
 #Matlab setup
 
 plt.ioff()

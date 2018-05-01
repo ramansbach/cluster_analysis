@@ -36,15 +36,16 @@ BBdlabel = BBB
 dt = 1.0
 emax = 294
 estep = 0.147
-tstart = 10
+tstart = 210
 tmax = 1999
 tskip = 200
 #atype = 'AB'
 combeadtype = 'E'
 markers = ['o','x','^','v','s']
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
-        +str(SCdlabel)+'-'+str(BBdlabel)+'_run'
-framets = range(tstart,tmax,tskip)
+        +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run'
+#framets = range(tstart,tmax,tskip)
+framets = [999]
 fnames = []
 for i in range(runs):
     fname = op.join(data_path,fbase + str(i+1) + '.gsd')
