@@ -15,7 +15,7 @@ from scipy.sparse.csgraph import connected_components
 from scipy.sparse import csr_matrix,lil_matrix,coo_matrix
 #from .due import due, Doi
 from .smoluchowski import massAvSize
-from mpi4py import MPI
+#from mpi4py import MPI
 from cdistances import conOptDistanceCython,alignDistancesCython,subsquashRNG
 from cdistances import squashRNGCOOCython
 
@@ -622,9 +622,9 @@ class SnapSystem(object):
         MPI communicator is greater than 1.
         
         """
-        comm = MPI.COMM_WORLD
-        size = comm.Get_size()
-        rank = comm.Get_rank()
+        comm = None#MPI.COMM_WORLD
+        self.size = 1#comm.Get_size()
+        self.rank = 0#comm.Get_rank()
         self.comm = comm
 	self.mpi = mpibool
         
@@ -639,7 +639,8 @@ class SnapSystem(object):
         if ttotal == -1:
             ttotal = len(traj)
         if self.mpi:
-            rank = comm.Get_rank()
+            rank = self.rank#comm.Get_rank()
+            size = self.size
             num = int(np.floor(ttotal / size))
             rem = ttotal % size
             if rank == 0:
@@ -721,8 +722,8 @@ class SnapSystem(object):
         
         """
         
-        rank = self.comm.Get_rank()
-        size = self.comm.Get_size()
+        rank = 0#self.comm.Get_rank()
+        size = 1#self.comm.Get_size()
         if ttotal == -1:
             ttotal = len(self.trajectory)
         num = int(np.floor(ttotal / size))
@@ -972,7 +973,7 @@ class SnapSystem(object):
         NotImplementedError
             If the cluster type is one that hasn't been programmed yet
         """
-        if self.comm.Get_rank() == 0:
+        if self.rank == 0:
             if ctype not in self.cldict.keys():
                 raise NotImplementedError("Unknown cluster type.")
             clsnaps = self.clsnaps[ctype]
@@ -1007,7 +1008,7 @@ class SnapSystem(object):
         """
         if ctype not in self.clsnaps.keys():
             raise NotImplementedError("Unknown cluster type in writeCIDs.")
-        if self.comm.Get_rank() == 0:
+        if self.rank == 0:
             fid = open(fname,'w')
             clsnaps = self.clsnaps[ctype]
             for clsnap in clsnaps:
@@ -1036,7 +1037,7 @@ class SnapSystem(object):
         """
         if ctype not in self.clsnaps.keys():
             raise NotImplementedError("Unknown cluster type in writeSizes")
-        if self.comm.Get_rank() == 0:
+        if self.rank == 0:
             fid = open(fname,'w')
             clsnaps = self.clsnaps[ctype]
             for clsnap in clsnaps:
@@ -1922,3 +1923,101 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         #pdb.set_trace()
         self.pos = np.reshape(self.pos,[molno,3*ats])
         
+class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
+    """ Class for tracking optical cluster locations that are initialized
+    from an xtc/Gromacs file instead of a HOOMD one
+    
+    Attributes
+        ----------
+    timestep: float
+        timestep
+    ats: int
+        number of beads per molecule
+    nclusts: int
+        number of clusters in the snapshot
+    pos: numpy array [M x 3*ats]
+        locations of molecules and beads within molecules
+        each molecule is its own line and then the locations of beads
+        are flattened within that
+    clusterIDs: list [len M]        
+    """
+    
+    def readGro(self,fName): 
+        """ Get a list of positions from a Gromacs .gro file
+        Parameters
+        ----------
+        fname: string
+            name of .gro file
+        Returns
+        -------
+        pos: numpy vector [len 3 * molecules * ats]
+            1D list of positions in .gro file
+        """
+        with open(fName, 'r') as myF:
+            myLns = myF.read().splitlines()
+        boxL1 = float(myLns[len(myLns)-1].split()[0])
+        boxL2 = float(myLns[len(myLns)-1].split()[1])
+        boxL3 = float(myLns[len(myLns)-1].split()[2])
+        return (np.array([[float(myLns[i][20:].split()[0]),
+                           float(myLns[i][20:].split()[1]), 
+                           float(myLns[i][20:].split()[2])]\
+                           for i in range(2, len(myLns)-1)]).flatten(),
+                           np.array([boxL1,boxL2,boxL3]))
+    
+    def getPos(self, t, trj, tpr, outGro):
+        """ get positions of atoms in a trajectory 
+        Parameters
+        ----------
+        t: time
+        trj: Gromacs trajectory
+        tpr: Gromacs run file
+        outGro: name for temperory Gromacs .gro file
+    
+        Returns
+        -------
+        pos: numpy vector [len 3 * molecules * ats]
+            1D list of positions in .gro file        
+        """
+        os.system('echo 0 | trjconv -f ' + trj + ' -o ' + outGro + ' -b ' \
+                   + str(t) + ' -e ' + str(t) + ' -s ' + tpr)
+        return self.readGro(outGro)[0]
+    
+    def __init__(self, t, trj, tpr, outGro, ats, molno):
+        """ Initialize a ContactClusterSnapshotXTC object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trj: Gromacs trajectory name (xtc format)
+        
+        tpr: Gromacs run file name (tpr format)
+        
+        outGro: name for an output Gromacs .gro file
+        
+        ats: the number of beads in a single molecule
+        
+        molno: the number of molecules in the system
+        
+        
+            the index of the cluster that each molecule belongs to
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
+        """
+        self.timestep = t
+        self.ats = ats
+        self.nclusts = molno
+        self.clusterIDs = np.zeros(molno)
+        self.pos = self.getPos(t,trj,tpr,outGro)
+        if len(self.pos) != 3 * molno * ats:
+            raise RuntimeError("incorrect number of atoms or molecules")
+        #pdb.set_trace()
+        self.pos = np.reshape(self.pos,[molno,3*ats])
