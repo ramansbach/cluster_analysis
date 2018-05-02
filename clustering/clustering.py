@@ -22,7 +22,8 @@ from cdistances import squashRNGCOOCython
 
 __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
            "OpticalClusterSnapshot","AlignedClusterSnapshot",
-           "ContactClusterSnapshotXTC","SnapSystem",
+           "ContactClusterSnapshotXTC","OpticalClusterSnapshotXTC",
+           "SnapSystem",
            "conOptDistance","conOptDistanceC","alignedDistance",
            "alignedDistanceC","fixMisplacedArom","checkSymmetry",
            "squashRNG","squashRNGCython","squashRNGPy","squashRNGCOO",
@@ -554,12 +555,12 @@ class SnapSystem(object):
                          'optical':conOptDistanceCython,
                          'aligned':alignDistancesCython}, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
-                 atype=u'LS',ttotal=-1,tstart=0):
+                 atype=u'LS',ttotal=-1,tstart=0,tpr=None):
         """ Initialize a full system of gsd snapshots over a trajectory.
 
         Parameters
         ----------
-        traj: a gsd.hoomd trajectory
+        traj: a gsd.hoomd trajectory or a gro or an xtc file name
         
         ats: dictionary
         the number of beads in a single molecule for each cluster type
@@ -588,6 +589,8 @@ class SnapSystem(object):
         tstart: int
             timestep to start at, defaults to zero 
             (last timestep = tstart + ttotal)
+        tpr: string
+            name of tpr file, used only with xtc trajectory
         
         Attributes
         ----------
@@ -611,11 +614,23 @@ class SnapSystem(object):
             referring to how aromatic beads are labeled in the trajectory
         comm: MPI communicator
         
+        ------
+        Raises
+        ------
+        NotImplementedError: 
+            - if traj isn't a hoomd trajectory or a file ending
+            in xtc or gro
+            - if self.mpi is set to true for non hoomd stuff
+            
+        ValueError:
+            - if tpr is set to None with an xtc file
+            
         
         Notes
         -----
         Allows for MPI implementation of system if the size of the 
-        MPI communicator is greater than 1.
+        MPI communicator is greater than 1 AND it's a gsd system rather than
+        an XTC one
         
         """
         comm = MPI.COMM_WORLD
@@ -628,7 +643,17 @@ class SnapSystem(object):
         else:
             self.mpi = False
         
-        
+        if (type(traj) is not str) and (type(traj) is not gsd.hoomd.HOOMDTrajectory):
+            raise NotImplementedError("Invalid trajectory type")
+        if (type(traj) is gsd.hoomd.HOOMDTrajectory):
+            if self.mpi:
+                raise NotImplementedError("MPI is only available for HOOMD trajectory types")
+        if (type(traj) is str):
+            ext = traj.split('.')[1]
+            if ext != 'gro' and ext != 'xtc':
+                raise NotImplementedError("Invalid trajectory type")
+            if ext == 'xtc' and tpr is None:
+                raise ValueError("tpr must have a value for xtc trajectories")
         self.trajectory = traj
         self.ats = ats
         self.molno = molno
@@ -680,18 +705,35 @@ class SnapSystem(object):
         else:
             for ctype in cldict.keys():
                 if ctype == 'contact':
-                   
-                    clusters = [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
+                    if type(traj) is str:
+                        clusters = [ContactClusterSnapshotXTC(t, traj, tpr, 
+                                                            'temp.gro', ats, 
+                                                            molno) \
+                                    for t in range(tstart,ttotal+tstart)]
+                    else:
+                        clusters = \
+                        [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
                                 for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'optical':
-                    clusters = [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
+                    if type(traj) is str:
+                        clusters = [OpticalClusterSnapshotXTC(t,traj,tpr,
+                                                              'temp.gro',ats,
+                                                              molno,compairs) \
+                                    for t in range(tstart,ttotal+tstart)]
+                    else:
+                        clusters = \
+                        [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
                                                        atype=atype) \
-                                                       for t in range(tstart,ttotal+tstart)]
+                                        for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'aligned':
-                    clusters = [AlignedClusterSnapshot(t,traj,ats[ctype],molno,
+                    if type(traj) is str:
+                        raise NotImplementedError("Aligned cluster only available for HOOMD type trajectories")
+                    else:
+                        clusters = \
+                        [AlignedClusterSnapshot(t,traj,ats[ctype],molno,
                                                        compairs=compairs,
                                                        atype=atype) \
-                                                       for t in range(tstart,ttotal+tstart)]
+                                        for t in range(tstart,ttotal+tstart)]
                 else:
                     raise NotImplementedError("Unknown cluster type")
                 self.clsnaps[ctype] = clusters
@@ -1272,6 +1314,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
                                             return_labels=True,
                                             connection='weak')
+                                        
         #pdb.set_trace()
         return (nclusts,clusterIDs,BT)
     
@@ -1813,7 +1856,7 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
                                             return_labels=True)
         
         return (nclusts,clusterIDs,BT)
-
+        
 class ContactClusterSnapshotXTC(ContactClusterSnapshot):
     """ Class for tracking contact cluster locations that are initialized
     from an xtc/Gromacs file instead of a HOOMD one
@@ -1832,8 +1875,7 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         are flattened within that
     clusterIDs: list [len M]        
     """
-    
-    def readGro(self,fName): 
+    def readGro(self,fName):
         """ Get a list of positions from a Gromacs .gro file
         Parameters
         ----------
@@ -1850,13 +1892,14 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         boxL2 = float(myLns[len(myLns)-1].split()[1])
         boxL3 = float(myLns[len(myLns)-1].split()[2])
         return (np.array([[float(myLns[i][20:].split()[0]),
-                           float(myLns[i][20:].split()[1]), 
+                           float(myLns[i][20:].split()[1]),
                            float(myLns[i][20:].split()[2])]\
                            for i in range(2, len(myLns)-1)]).flatten(),
                            np.array([boxL1,boxL2,boxL3]))
-    
+
     def getPos(self, t, trj, tpr, outGro):
         """ get positions of atoms in a trajectory 
+        Trajectory can be .xtc or .gro type
         Parameters
         ----------
         t: time
@@ -1867,11 +1910,24 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         Returns
         -------
         pos: numpy vector [len 3 * molecules * ats]
-            1D list of positions in .gro file        
+            1D list of positions in .gro file  
+            
+        -------
+        Raises
+        ------
+        NotImplementedError: if the trj given does not end in .gro or .xtc
         """
-        os.system('echo 0 | trjconv -f ' + trj + ' -o ' + outGro + ' -b ' \
+        ext = trj.split('.')[1]
+        if ext == 'xtc':
+        
+            os.system('echo 0 | trjconv -f ' + trj + ' -o ' + outGro + ' -b ' \
                    + str(t) + ' -e ' + str(t) + ' -s ' + tpr)
-        return self.readGro(outGro)[0]
+            return self.readGro(outGro)[0]
+        elif ext == 'gro':
+            return self.readGro(trj)[0]
+        else:
+            raise NotImplementedError("Invalid file extension for this cluster type")
+
     
     def __init__(self, t, trj, tpr, outGro, ats, molno):
         """ Initialize a ContactClusterSnapshotXTC object.
@@ -1892,6 +1948,8 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         
         
             the index of the cluster that each molecule belongs to
+            
+            
         Raises
         ------
         RuntimeError
@@ -1913,3 +1971,77 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         #pdb.set_trace()
         self.pos = np.reshape(self.pos,[molno,3*ats])
         
+
+class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
+    """ Class for tracking optical cluster locations that are initialized
+    from an xtc/Gromacs file instead of a HOOMD one
+    
+    Attributes
+        ----------
+    timestep: float
+        timestep
+    ats: int
+        number of beads per molecule
+    nclusts: int
+        number of clusters in the snapshot
+    pos: numpy array [M x 3*ats]
+        locations of molecules and beads within molecules
+        each molecule is its own line and then the locations of beads
+        are flattened within that
+    clusterIDs: list [len M]        
+    """
+    
+    def __init__(self, t, trj, tpr, outGro, ats, molno, comIDs):
+        """ Initialize a ContactClusterSnapshotXTC object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trj: Gromacs trajectory name (xtc format)
+        
+        tpr: Gromacs run file name (tpr format)
+        
+        outGro: name for an output Gromacs .gro file
+        
+        ats: the number of beads in a single molecule
+        
+        molno: the number of molecules in the system
+        
+        
+            the index of the cluster that each molecule belongs to
+            
+        comIDs: N x M numpy array of ints
+            bead IDs of the beads in the N cores with M participating beads
+            each
+            
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
+        """
+        self.timestep = t
+        self.ats = ats
+        self.nclusts = molno
+        self.clusterIDs = np.zeros(molno)
+        self.pos = self.getPos(t,trj,tpr,outGro)
+        if len(self.pos) != 3 * molno * ats:
+            raise RuntimeError("incorrect number of atoms or molecules")
+        #pdb.set_trace()
+        self.pos = np.reshape(self.pos,[molno,3*ats])
+        M = np.shape(comIDs)[1]
+        N = np.shape(comIDs)[0]
+        pos = np.zeros((molno,3*np.shape(comIDs)[0]))
+        for mol in range(molno):
+            for com in range(np.shape(comIDs)[0]):
+                inds = comIDs[com,:]
+                compos = np.array([self.pos[mol,3*inds+i].sum()/M \
+                for i in range(3)])
+                pos[mol,3*com:(3*com+3)] = compos
+        self.pos = pos
