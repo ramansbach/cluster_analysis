@@ -10,6 +10,12 @@ This is a small project to perform data analysis for clustering applications.  R
 (5) Analyze internal structure: twist angles and orderedness in terms of cluster hierarchy
 (6) Analyze system fractal dimension for a given timestep
 
+It has recently been extended to work with Gromacs XTC and GRO files.
+
+It can do optical and contact cluster analysis but not yet aligned cluster analysis for either HOOMD or Gromacs file types.
+
+Note that MPI support is currently not fully implemented.
+
 ### Organization of the  project
 
 The project has the following structure:
@@ -39,4 +45,5 @@ The project has the following structure:
       |- ipynb/
          |- ...
 
+In "scripts" there is a number of automated scripts currently set up for use on the alf-clusters-rv.mrl.illinois.edu cluster; however, updating for any SGE submission system should be relatively straightforward.
 

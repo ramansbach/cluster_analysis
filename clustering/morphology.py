@@ -13,7 +13,7 @@ from scipy.special import erf
 from scipy.sparse.csgraph import connected_components
 #from .due import due, Doi
 from .smoluchowski import massAvSize
-from mpi4py import MPI
+#from mpi4py import MPI
 from cdistances import conOptDistanceCython,alignDistancesCython
 
 __all__ = ['fixPBC']

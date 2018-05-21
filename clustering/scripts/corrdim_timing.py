@@ -3,6 +3,9 @@
 Created on Mon Oct 16 08:18:15 2017
 
 @author: rachael
+
+Compute the correlation integral over the COMs of peptides.
+
 """
 from __future__ import absolute_import, division, print_function
 from time import time
@@ -26,19 +29,18 @@ font = {'weight' : 'bold',
 matplotlib.rc('font', **font)
 runs = 1
 
-ats = {'contact':17,'optical':12,'aligned':6}
+ats = {'contact':17,'optical':12}
 #molno = 4
 molnolabel = 10000
 AAdlabel = AAA
 SCdlabel = SCSCSC
 BBdlabel = BBB
 dt = 1.0
-emax = 294
-estep = 0.147
-tstart = 10
-tmax = 799
-tskip = 100
-#atype = 'AB'
+emax = 294 #maximum length scale to compute correlation integral on
+estep = 0.147 #distance steps to compute correlation integral at
+tstart = 10 #timestep where to begin
+tmax = 799 #final timestep at which to compute correlation integral
+tskip = 100 #compute correlation integral at every 100 timesteps
 combeadtype = 'E'
 markers = ['o','x','^','v','s']
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\

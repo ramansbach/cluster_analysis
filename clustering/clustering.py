@@ -6,6 +6,7 @@ import gsd.hoomd
 import sklearn
 import scipy.optimize as opt
 import os
+import os.path
 import pdb
 from sklearn.neighbors import BallTree
 from sklearn.neighbors import radius_neighbors_graph
@@ -312,6 +313,7 @@ def conOptDistance(x,y):
     ats = len(x)/3
     xa = np.reshape(x,[ats,3])
     ya = np.reshape(y,[ats,3])
+    
     #return np.min(euclidean_distances(xa,ya,squared=True))    
     return np.min(cdist(xa,ya,metric='sqeuclidean'))
 
@@ -555,7 +557,7 @@ class SnapSystem(object):
                          'optical':conOptDistanceCython,
                          'aligned':alignDistancesCython}, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
-                 atype=u'LS',ttotal=-1,tstart=0,tpr=None):
+                 atype=u'LS',ttotal=-1,tstart=0,tpr=None,outGro='conf'):
         """ Initialize a full system of gsd snapshots over a trajectory.
 
         Parameters
@@ -591,6 +593,9 @@ class SnapSystem(object):
             (last timestep = tstart + ttotal)
         tpr: string
             name of tpr file, used only with xtc trajectory
+            
+        outGro: string
+            name of file to safe individual gro files to
         
         Attributes
         ----------
@@ -642,14 +647,15 @@ class SnapSystem(object):
             self.mpi = True
         else:
             self.mpi = False
-        
+        #pdb.set_trace()
         if (type(traj) is not str) and (type(traj) is not gsd.hoomd.HOOMDTrajectory):
             raise NotImplementedError("Invalid trajectory type")
         if (type(traj) is gsd.hoomd.HOOMDTrajectory):
             if self.mpi:
                 raise NotImplementedError("MPI is only available for HOOMD trajectory types")
         if (type(traj) is str):
-            ext = traj.split('.')[1]
+            spl = traj.split('.')
+            ext = spl[len(spl)-1]
             if ext != 'gro' and ext != 'xtc':
                 raise NotImplementedError("Invalid trajectory type")
             if ext == 'xtc' and tpr is None:
@@ -706,20 +712,49 @@ class SnapSystem(object):
             for ctype in cldict.keys():
                 if ctype == 'contact':
                     if type(traj) is str:
-                        clusters = [ContactClusterSnapshotXTC(t, traj, tpr, 
-                                                            'temp.gro', ats, 
+                        if ext == 'gro':
+                            clusters = [ContactClusterSnapshotXTC(t, traj, ats, 
                                                             molno) \
                                     for t in range(tstart,ttotal+tstart)]
+                        else:
+                            #pdb.set_trace()
+                            flag = False
+                            for t in range(tstart,ttotal+tstart):
+                                if not os.path.isfile(outGro+str(t)+'.gro'):
+                                    flag = True
+                                    break
+                            if flag:
+                                grocall = \
+    'echo 0 | trjconv -s {0} -f {1} -o {2}.gro -sep'.format(tpr,traj,outGro)
+                                os.system(grocall)
+                            clusters = [ContactClusterSnapshotXTC(t, 
+                                            outGro+str(t)+'.gro',ats,molno) \
+                                        for t in range(tstart,ttotal+tstart)]
+                             
                     else:
                         clusters = \
                         [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
                                 for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'optical':
                     if type(traj) is str:
-                        clusters = [OpticalClusterSnapshotXTC(t,traj,tpr,
-                                                              'temp.gro',ats,
+                        if ext == 'gro':
+                            clusters = [OpticalClusterSnapshotXTC(t,traj,ats,
                                                               molno,compairs) \
                                     for t in range(tstart,ttotal+tstart)]
+                        else:
+                            flag = False
+                            for t in range(tstart,ttotal+tstart):
+                                if not os.path.isfile(outGro+str(t)+'.gro'):
+                                    flag = True
+                                    break
+                            if flag:
+                                grocall = \
+    'echo 0 | trjconv -s {0} -f {1} -o {2}.gro -sep'.format(tpr,traj,outGro)
+                                os.system(grocall)
+                            clusters = [OpticalClusterSnapshotXTC(t, 
+                                            outGro+str(t)+'.gro',ats,molno,
+                                            compairs) \
+                                        for t in range(tstart,ttotal+tstart)]
                     else:
                         clusters = \
                         [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
@@ -889,7 +924,9 @@ class SnapSystem(object):
         func = self.clfunc[ctype]
         if lcompute is not None:
             lfile = open(lcompute,'w')
+        tstep = 0
         for clustSnap in clusters:
+            tstep +=1
             BT = clustSnap.setClusterID(cutoff)
             if lcompute is not None:
                 ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,
@@ -1262,6 +1299,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         (nclusts,clusterIDs,BT) = \
         self.getClusterID(self.pos,cutoff,conOptDistanceCython)
         self.nclusts = nclusts
+       
         self.clusterIDs = clusterIDs
         return BT
         
@@ -1897,39 +1935,10 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
                            for i in range(2, len(myLns)-1)]).flatten(),
                            np.array([boxL1,boxL2,boxL3]))
 
-    def getPos(self, t, trj, tpr, outGro):
-        """ get positions of atoms in a trajectory 
-        Trajectory can be .xtc or .gro type
-        Parameters
-        ----------
-        t: time
-        trj: Gromacs trajectory
-        tpr: Gromacs run file
-        outGro: name for temperory Gromacs .gro file
-    
-        Returns
-        -------
-        pos: numpy vector [len 3 * molecules * ats]
-            1D list of positions in .gro file  
-            
-        -------
-        Raises
-        ------
-        NotImplementedError: if the trj given does not end in .gro or .xtc
-        """
-        ext = trj.split('.')[1]
-        if ext == 'xtc':
-        
-            os.system('echo 0 | trjconv -f ' + trj + ' -o ' + outGro + ' -b ' \
-                   + str(t) + ' -e ' + str(t) + ' -s ' + tpr)
-            return self.readGro(outGro)[0]
-        elif ext == 'gro':
-            return self.readGro(trj)[0]
-        else:
-            raise NotImplementedError("Invalid file extension for this cluster type")
+
 
     
-    def __init__(self, t, trj, tpr, outGro, ats, molno):
+    def __init__(self, t, trj, ats, molno):
         """ Initialize a ContactClusterSnapshotXTC object.
 
         Parameters
@@ -1938,9 +1947,6 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
 
         trj: Gromacs trajectory name (xtc format)
         
-        tpr: Gromacs run file name (tpr format)
-        
-        outGro: name for an output Gromacs .gro file
         
         ats: the number of beads in a single molecule
         
@@ -1965,7 +1971,8 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         self.ats = ats
         self.nclusts = molno
         self.clusterIDs = np.zeros(molno)
-        self.pos = self.getPos(t,trj,tpr,outGro)
+        self.pos = self.readGro(trj)[0]
+        
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()
@@ -1991,7 +1998,7 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
     clusterIDs: list [len M]        
     """
     
-    def __init__(self, t, trj, tpr, outGro, ats, molno, comIDs):
+    def __init__(self, t, trj, ats, molno, comIDs):
         """ Initialize a ContactClusterSnapshotXTC object.
 
         Parameters
@@ -2030,13 +2037,12 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
         self.ats = ats
         self.nclusts = molno
         self.clusterIDs = np.zeros(molno)
-        self.pos = self.getPos(t,trj,tpr,outGro)
+        self.pos = self.readGro(trj)[0]
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()
         self.pos = np.reshape(self.pos,[molno,3*ats])
         M = np.shape(comIDs)[1]
-        N = np.shape(comIDs)[0]
         pos = np.zeros((molno,3*np.shape(comIDs)[0]))
         for mol in range(molno):
             for com in range(np.shape(comIDs)[0]):

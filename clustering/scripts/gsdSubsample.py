@@ -1,4 +1,5 @@
 #open a gsd file and write out a subsampled version, keeping only every N timesteps
+#useful if you want to be analyzing a shorter trajectory
 import gsd.hoomd
 import argparse
 import time

@@ -3,19 +3,11 @@ Created on Fri Oct 13 07:55:15 2017
 
 @author: Rachael Mansbach
 
-Script to do a full (MPI) data analysis run using the cluster module
+Script to run after analyze_clusters_serial.py, which computes the distribution
+of lengths of contact and optical clusters, where "length" means the longest
+distance between the COMs of two molecules in a cluster unwrapped over the
+periodic boundary conditions.
 
-Description of necessary events:
-
-1) Find all cluster IDs
-2) Write out cluster sizes and cluster IDs at each time step
-3) Plot Mass-averaged cluster size of contact, aligned, and optical clusters
-both separately and in the same plot, including standard deviation over runs
-and save raw mu2 data
-4) Compute linear and nonlinear Smoluchowski fits & plot for contact, optical,
-and aligned clusters
-5) Compute, plot, and save data for the correlation integral of the final 
-snapshot
 """
 from __future__ import absolute_import, division, print_function
 from time import time

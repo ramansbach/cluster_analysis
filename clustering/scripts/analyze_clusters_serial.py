@@ -4,19 +4,11 @@ Created on Fri Oct 13 07:55:15 2017
 
 @author: Rachael Mansbach
 
-Script to do a full (MPI) data analysis run using the cluster module
+Script to do (serial) data analysis run using the cluster module
 
-Description of necessary events:
+Works for HOOMD type and should be used with setupscripts.sh for correct
+population of variables such as SSS, BBB, AAA, SCSCSC
 
-1) Find all cluster IDs
-2) Write out cluster sizes and cluster IDs at each time step
-3) Plot Mass-averaged cluster size of contact, aligned, and optical clusters
-both separately and in the same plot, including standard deviation over runs
-and save raw mu2 data
-4) Compute linear and nonlinear Smoluchowski fits & plot for contact, optical,
-and aligned clusters
-5) Compute, plot, and save data for the correlation integral of the final 
-snapshot
 """
 from __future__ import absolute_import, division, print_function
 from time import time
@@ -39,42 +31,31 @@ font = {'weight' : 'bold',
 matplotlib.rc('font', **font)
 
 
-runs = 1
+runs = 1 #number of independent simulations
 
-ttotal = 799
-tstart = 0
-ats = {'contact':17,'optical':12,'aligned':6}
-#molno = 4
-molno = 10648
-c1=float(BBB)
-c2=0.35
-c3=0.35
+ttotal = 799 #total number of timesteps
+tstart = 0 #what time to start at, can start t > 0 to eliminate equilibration
+ats = {'contact':17,'optical':12} #number of molecules associated with analysis of a monomer
+molno = 10648 #total number of molecules in the system
+c1=float(BBB) #cutoff for contact clusters (in nm)
+c2=0.35 #cutoff for optical clusters (in nm)
 c1 = max(1.1,(c1/100.)*1.1225+0.1)
-cs={'contact':c1,'optical':c2,'aligned':c3}
-cutoff = {'contact':c1*c1,'optical':c2*c2,'aligned':c3*c3}
-compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])
-molnolabel = 10000
-AAdlabel = AAA
-SCdlabel = SCSCSC
-BBdlabel = BBB
-dt = 1.0
-rank=0
-emax = 73.5
-estep = 0.147
-atype = u'LS'
-combeadtype = 'E'
-colors = {'contact':'red','optical':'blue','aligned':'olive'}
+cs={'contact':c1,'optical':c2}
+cutoff = {'contact':c1*c1,'optical':c2*c2}
+compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])#indices of optical beads
+molnolabel = 10000 #label of beginning of file name
+AAdlabel = AAA #A bead parameter label
+SCdlabel = SCSCSC #SC bead parameter label
+BBdlabel = BBB #BB bead parameter label
+dt = 1.0 #assumed timestep
+atype = u'LS' #optical/aligned bead type
+combeadtype = 'E'#bead type of center of mass bead
+colors = {'contact':'red','optical':'blue'}
 
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
-        +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run'
+        +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run' #template of .gsd file name
 
 fnames = []
-ldfnames = []
-for i in range(runs):
-    fname = op.join(data_path,fbase + str(i+1) + '.gsd')
-    fnames.append(fname)
-    ldfname = op.join(data_path,fbase+'ldistrib'+str(i+1))
-    ldfnames.append(ldfname)
 start = time()    
 traj = gsd.hoomd.open(fname)
 box = traj[0].configuration.box[0:3]
@@ -89,12 +70,8 @@ print("Time to setup clusters: ",end-start)
 start = time()
 lind = 0             
 for Syst in Systs:
-    ldfnameC = ldfnames[lind]+'_C.dat'
-    ldfnameO = ldfnames[lind]+'_O.dat'
-    ldfnameA = ldfnames[lind]+'_A.dat'
     Syst.get_clusters_serial('contact',box,lcompute=None)
     Syst.get_clusters_serial('optical',box,lcompute=None)
-    Syst.get_clusters_serial('aligned',box,lcompute=None)
     lind += 1
 end = time()
 print("Time to get clusters: ",end-start)
@@ -105,14 +82,13 @@ mu2s = {'contact':np.zeros([ttotal,runs]),
             'aligned':np.zeros([ttotal,runs])}
 start = time()
 for Syst in Systs:
-    for ctype in ['contact','optical','aligned']:
+    for ctype in ['contact','optical']:
         #write out cluster sizes and cluster IDs at each time step
         cidName = fbase + 'cut'+str(cs[ctype]) + str(run+1) + ctype + '-CIDs.dat'
         cszName = fbase + 'cut' + str(cs[ctype]) + str(run+1) + ctype + '-sizes.dat'
         Syst.writeCIDs(ctype,op.join(save_path,cidName))
         Syst.writeSizes(ctype,op.join(save_path,cszName))
         #compute mass-averaged cluster size versus time
-        #pdb.set_trace()
             
     run += 1
 end = time()

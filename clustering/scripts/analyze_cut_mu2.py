@@ -4,19 +4,14 @@ Created on Fri Oct 13 07:55:15 2017
 
 @author: Rachael Mansbach
 
-Script to do a full (MPI) data analysis run using the cluster module
-
-Description of necessary events:
-
-1) Find all cluster IDs
-2) Write out cluster sizes and cluster IDs at each time step
-3) Plot Mass-averaged cluster size of contact, aligned, and optical clusters
+Script to do the following (after running analyze_clusters of some kind to get
+the appropriate cluster sizes)
+* Plot Mass-averaged cluster size of contact and optical clusters
 both separately and in the same plot, including standard deviation over runs
 and save raw mu2 data
-4) Compute linear and nonlinear Smoluchowski fits & plot for contact, optical,
-and aligned clusters
-5) Compute, plot, and save data for the correlation integral of the final 
-snapshot
+* Compute linear and nonlinear Smoluchowski fits & plot for contact & optical clusters
+
+Most parameters are the same as in analyze_clusters_serial.py
 """
 from __future__ import absolute_import, division, print_function
 from mpi4py import MPI
@@ -44,17 +39,16 @@ matplotlib.rc('font', **font)
 runs = 1
 
 ttotal = 799
-ttotals = {'contact':ttotal,'optical':ttotal,'aligned':ttotal}
+ttotals = {'contact':ttotal,'optical':ttotal}
 tstart = 10
 
-ats = {'contact':17,'optical':12,'aligned':6}
+ats = {'contact':17,'optical':12}
 #molno = 4
 molno = 10648
 cut=BBB
 c1 = float(cut)
 c1 = max(1.1,(c1/100.)*1.1225+0.1)
-cs={'contact':c1,'optical':0.35,'aligned':0.35}
-cutoff = {'contact':1.0*1.0,'optical':0.35*0.35,'aligned':0.35*0.35}
+cs={'contact':c1,'optical':0.35}
 compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])
 #compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
 molnolabel = 10000
@@ -62,12 +56,10 @@ AAdlabel = AAA
 SCdlabel = SCSCSC
 BBdlabel = BBB
 dt = 1.0
-emax = 73.5
-estep = 0.147
 atype = u'LS'
 #atype = 'AB'
 combeadtype = 'E'
-colors = {'contact':'red','optical':'blue','aligned':'olive'}
+colors = {'contact':'red','optical':'blue'}
 
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
         +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run'
@@ -88,7 +80,7 @@ start = time()
 
 
 
-for ctype in ['contact','optical','aligned']:
+for ctype in ['contact','optical']:
     #pdb.set_trace()
     cszNames = [op.join(save_path,fbase + 'cut'+str(cs[ctype])+ str(runi+1) + ctype + '-sizes.dat') \
                 for runi in range(runs)]
@@ -110,7 +102,7 @@ cid = 0
 start = time()
 finsize = dict()
 sfinsize = dict()
-for ctype in ['contact','optical','aligned']:
+for ctype in ['contact','optical']:
    axseach[ctype] = figeach.add_subplot(3,1,cid+1)
    mu2sc = mu2s[ctype]
    ymax = np.max(mu2sc[10:len(mu2sc),:])
