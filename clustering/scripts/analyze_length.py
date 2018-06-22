@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import pdb
 save_path = SSS
 data_path=save_path
+traj_path = '/data/mansbac2/coarsegraining/patchy/fulltraj'
 #Matlab setup
 
 plt.ioff()
@@ -30,19 +31,19 @@ font = {'weight' : 'bold',
 matplotlib.rc('font', **font)
 
 
-runs = 1
+runs = 5
 
-ttotal = 799
+ttotal = 999
 tstart = 0
-ats = {'contact':17,'optical':12,'aligned':6}
+ats = {'contact':17,'optical':12}
 #molno = 4
 molno = 10648
 c1=float(BBB)
 c2=0.35
 c3=0.35
 c1 = max(1.1,(c1/100.)*1.1225+0.1)
-cs={'contact':c1,'optical':c2,'aligned':c3}
-cutoff = {'contact':c1*c1,'optical':c2*c2,'aligned':c3*c3}
+cs={'contact':c1,'optical':c2}
+cutoff = {'contact':c1*c1,'optical':c2*c2}
 compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])
 molnolabel = 10000
 AAdlabel = AAA
@@ -63,14 +64,14 @@ fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
 fnames = []
 ldfnames = []
 for i in range(runs):
-    fname = op.join(data_path,fbase + str(i+1) + '.gsd')
+    fname = op.join(traj_path,fbase + str(i+1) + '.gsd')
     fnames.append(fname)
     ldfname = op.join(data_path,fbase+'ldistrib'+str(i+1))
     ldfnames.append(ldfname)
 start = time()    
 traj = gsd.hoomd.open(fname)
 box = traj[0].configuration.box[0:3]
-Systs = [cl.SnapSystem(traj,ats,molno,cutoff,
+Systs = [cl.SnapSystem(gsd.hoomd.open(fname),ats,molno,cutoff,
                        compairs=compairs,ttotal=ttotal,tstart=tstart,
                        atype=atype) for fname in fnames]
 end = time()

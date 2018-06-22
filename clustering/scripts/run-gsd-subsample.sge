@@ -6,8 +6,8 @@
 
 #$ -m abe                   # email on abort, begin, and end
 #$ -M mansbac2@illinois.edu      # email address
-#$ -o mu2-AAA-SCSCSC-BBB.log
-#$ -N mu2-AAA-SCSCSC-BBB            # job name
+#$ -o gss-AAA-SCSCSC-BBB.log
+#$ -N gss-AAA-SCSCSC-BBB            # job name
 #$ -j y
 #$ -q all.q                 # queue name
 #$ -pe orte 1             # parallel environment & # cores
@@ -33,9 +33,16 @@ echo "-------------------"
 echo " "
 
 cd $SGE_O_WORKDIR
-FIN=/data/mansbac2/coarsegraining/patchy/fulltraj/mols10000_AAA-SCSCSC-BBB_run1.gsd
-FOUT=SSS/mols10000_AAA-SCSCSC-BBB_short_run1.gsd
-python gsdSubsample.py $FIN $FOUT 5
+
+FSKIP=4
+
+for i in `seq 1 5`; do
+#i=1
+	FIN=/data/mansbac2/coarsegraining/patchy/fulltraj/mols10000_AAA-SCSCSC-BBB_run$i\.gsd
+	FOUT=/data/mansbac2/coarsegraining/patchy/fulltraj/mols10000_AAA-SCSCSC-BBB_short_run$i\.gsd
+	python gsdSubsample.py $FIN $FOUT $FSKIP
+done
+
 echo " "
 echo "This job is DONE!"
 echo " "

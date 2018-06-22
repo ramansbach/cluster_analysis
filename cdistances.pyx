@@ -105,5 +105,5 @@ def squashRNGCOOCython(rng,apermol):
         col = cols[i]
         if col > row:
             molrng[row,col] = 1
-
+            molrng[col,row] = 1
     return csr_matrix(molrng)

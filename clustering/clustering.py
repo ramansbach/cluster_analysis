@@ -924,9 +924,9 @@ class SnapSystem(object):
         func = self.clfunc[ctype]
         if lcompute is not None:
             lfile = open(lcompute,'w')
-        tstep = 0
+
         for clustSnap in clusters:
-            tstep +=1
+
             BT = clustSnap.setClusterID(cutoff)
             if lcompute is not None:
                 ldistrib = clustSnap.getLengthDistribution(cutoff,box,func,
@@ -1299,11 +1299,10 @@ class ContactClusterSnapshot(ClusterSnapshot):
         (nclusts,clusterIDs,BT) = \
         self.getClusterID(self.pos,cutoff,conOptDistanceCython)
         self.nclusts = nclusts
-       
         self.clusterIDs = clusterIDs
         return BT
         
-    def setClusterIDFromFile(self,fname):
+    def setClusterIDFromFile(self,fname,line=None):
         """
         Set the cluster IDs by opening a file and checking what they are
         
@@ -1311,6 +1310,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         ----------
         fname: string
             the name of the file that contains the clusterIDs
+        line: int
+	    the line number if it differs from the timestep of the cluster snap
         
         Returns
         -------
@@ -1323,7 +1324,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         f = open(fname)
         lines = f.readlines()
         f.close()
-        line = self.timestep
+        if line is None:
+            line = self.timestep
         cIDs = lines[line].split()
         self.clusterIDs = np.array([int(float(cID)) for cID in cIDs])
         
@@ -1421,6 +1423,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
         rng = squashRNGCOOCython(rng,int(sz[1]/3))
         (nCC,CC) = connected_components(rng,connection='weak')
+        
         if nCC != 1:
             raise RuntimeError("This isn't a fully connected cluster.")
         fixedXYZ[0,:] = fixCoords(fixedXYZ[0,:].copy(),fixedXYZ[0,0:3].copy(),
@@ -1483,7 +1486,6 @@ class ContactClusterSnapshot(ClusterSnapshot):
             inds = np.where(self.clusterIDs==cID)[0]
             if len(inds) > 1:
                 if writegsd is not None:
-                    
                     cIDpos = self.fixPBC(cID,cutoff,box,func,
                                          writegsd=writegsd+str(cID)+'.gsd',
                                          BT=BT)
@@ -1812,8 +1814,6 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
                     comloc = aBeadsMol[compairs[m][1]]+cv/2
                     #comloc = np.mean(aBeadsMol[compairs[m]],axis=0)
                     #pdb.set_trace()
-                if np.isclose(comloc,np.array([9.360982,-1.270450,1.375538])).all():
-                    pdb.set_trace()
                 aCOMs[moli*nPairs + m,:] = comloc
 
         return aCOMs       
@@ -1913,7 +1913,8 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         are flattened within that
     clusterIDs: list [len M]        
     """
-    def readGro(self,fName):
+    
+    def readGro(self,fName): 
         """ Get a list of positions from a Gromacs .gro file
         Parameters
         ----------
