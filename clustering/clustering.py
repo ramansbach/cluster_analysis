@@ -2023,6 +2023,7 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
             bead IDs of the beads in the N cores with M participating beads
             each
             
+            
         Raises
         ------
         RuntimeError
@@ -2030,15 +2031,16 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
         
         Notes
         -----
-        You can create a ClusterSnapshot object from either an array (for use
-        with MPI) or from a HOOMD trajectory
-        
+        * Need to calculate COMs with PBCs accounted for or you get artifacts 
+        because we're specifically breaking these things over the box in order 
+        to calculate this correctly
+        * We are assuming that the masses of all beads in the COMs are the same
         """
         self.timestep = t
         self.ats = ats
         self.nclusts = molno
         self.clusterIDs = np.zeros(molno)
-        self.pos = self.readGro(trj)[0]
+        (self.pos,boxL) = self.readGro(trj)
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()
@@ -2048,7 +2050,19 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
         for mol in range(molno):
             for com in range(np.shape(comIDs)[0]):
                 inds = comIDs[com,:]
-                compos = np.array([self.pos[mol,3*inds+i].sum()/M \
-                for i in range(3)])
+                
+                com0 = self.pos[mol,(3*inds[0]):(3*inds[0]+3)]
+                compos = np.zeros((1,3))
+                for cbeadi in range(1,M):
+                    comcurr = self.pos[mol,
+                                       (3*inds[cbeadi]):(3*inds[cbeadi]+3)]
+                    dcomcurr = comcurr-com0
+                    for xi in range(3):
+                        dcomcurr[xi] = dcomcurr[xi] - \
+                        boxL[xi]*np.round(dcomcurr[xi]/boxL[xi])
+                    compos += dcomcurr
+                compos = compos / M
+                compos = compos + com0
+                
                 pos[mol,3*com:(3*com+3)] = compos
         self.pos = pos

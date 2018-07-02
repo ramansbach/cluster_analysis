@@ -54,10 +54,10 @@ for t in range(int(totalsteps/skip)):
     frame = md.load_frame(fname,t,top=topfile)
     na = frame.top.n_atoms
     nmols = na / apermol
-    if not (na % apermol):
+    if (na % apermol):
         raise(ValueError,"Does not divide cleanly into molecules.")
     comlist = np.zeros((int(nmols),3))
-    for moli in range(len(nmols)):
+    for moli in range(int(nmols)):
         molframe = frame.atom_slice(range((moli*apermol),((moli+1)*apermol)))
         comlist[moli,:] = md.compute_center_of_mass(molframe)[0]
     cemat = cl.corrcalc(comlist,emax,estep)
