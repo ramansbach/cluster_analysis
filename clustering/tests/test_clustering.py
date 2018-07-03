@@ -8,9 +8,11 @@ import sys
 import clustering as cl
 import random
 import scipy
+import pytest
 #from context import clustering as cl
 #from context import smoluchowski as smol
 from cdistances import conOptDistanceCython,alignDistancesCython
+from scipy.sparse import csr_matrix,lil_matrix,coo_matrix
 #import imp
 #cl = imp.load_source('cl','/home/rachael/Analysis_and_run_code/analysis/cluster_analysis/clustering/clustering.py')
 data_path = op.join(cl.__path__[0], 'data')
@@ -728,6 +730,42 @@ def test_squashRNGCOOCython():
     rngS = cl.squashRNGCOOCython(rng,3)
     rngMini = np.array([[0,0,1],[0,0,0],[0,0,0]])
     npt.assert_array_equal(rngMini,rngS.toarray())
+    
+""" Testing the getting of indices for a CSR matrix"""
+def test_get_csr_inds_lil():
+    mat = np.array([[0,0,0,0],[5,8,0,0],[0,0,3,0],[0,6,0,0]])
+    matcsr = lil_matrix(mat)
+    with pytest.raises(TypeError):
+        cl.getIndsCsr(matcsr)
+        
+def test_get_csr_inds_dense():
+    matcsr = np.array([[0,0,0,0],[5,8,0,0],[0,0,3,0],[0,6,0,0]])
+    with pytest.raises(TypeError):
+        cl.getIndsCsr(matcsr)
+        
+def test_get_csr_inds():
+    mat = np.array([[0,0,0,0],[5,8,0,0],[0,0,3,0],[0,6,0,0]])
+    matcsr = csr_matrix(mat)
+    bonds = cl.getIndsCsr(matcsr)
+    abonds = np.array([[1,0],[1,1],[2,2],[3,1]])
+    npt.assert_array_equal(bonds,abonds)
+    
+def test_get_csr_inds2():
+    mat = np.array([[10,20,0,0,0,0],
+                    [0,30,0,40,0,0],
+                    [0,0,50,60,70,0],
+                    [0,0,0,0,0,80]])
+    matcsr = csr_matrix(mat)
+    abonds = np.array([[0,0],
+                       [0,1],
+                       [1,1],
+                       [1,3],
+                       [2,2],
+                       [2,3],
+                       [2,4],
+                       [3,5]])
+    bonds = cl.getIndsCsr(matcsr)
+    npt.assert_array_equal(bonds,abonds)                
 """
 def test_valid_metric():
     loop = 10

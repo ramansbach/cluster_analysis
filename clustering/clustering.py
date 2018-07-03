@@ -28,7 +28,7 @@ __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
            "conOptDistance","conOptDistanceC","alignedDistance",
            "alignedDistanceC","fixMisplacedArom","checkSymmetry",
            "squashRNG","squashRNGCython","squashRNGPy","squashRNGCOO",
-           "squashRNGCOOCython"]
+           "squashRNGCOOCython","getIndsCsr"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -58,6 +58,46 @@ def checkSymmetry(csr):
     symyes = not (csr!=csr.transpose()).max()
     return symyes
     
+def getIndsCsr(csr):
+    """
+    Gets the indices of all entries in a csr matrix
+    
+    ----------
+    Parameters
+    ----------
+    csr: matrix in CSR format
+    
+    -------
+    Returns
+    -------
+    bonds: 2 x M matrix
+        list of (i,j) indices corresponding to each of the M entries in the CSR
+        matrix
+                
+    Raises
+    ------
+    TypeError: if csr is not in csr format
+    """
+    if type(csr) != csr_matrix:
+        raise TypeError("Argument of getIndsCsr should be a CSR matrix!")
+        
+    ia = csr.indptr
+    ja = csr.indices
+    cii = 0
+    bi = 0
+    m = len(ja)
+    bonds = np.zeros((m,2))
+    for i in range(1,len(ia)):
+        ninrow = ia[i]-ia[i-1]
+        row = i-1
+        for n in range(cii,cii+ninrow):
+            col = ja[n]
+            bonds[bi,0] = row
+            bonds[bi,1] = col
+            bi += 1
+        cii += ninrow
+    return bonds
+        
 def squashRNG(rng,apermol):
     """
     Reduces radius neighbors graph to a new graph based on molecules instead of
@@ -1502,6 +1542,65 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 
                 ldistrib[inds] = endendl
         return ldistrib
+        
+class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
+    """
+    Contact cluster that maintains indices of different molecule types.
+    Attributes
+        ----------
+    timestep: float
+        timestep
+    ats: int
+        number of beads per molecule
+    nclusts: int
+        number of clusters in the snapshot
+    pos: numpy array [M x 3*ats]
+        locations of molecules and beads within molecules
+        each molecule is its own line and then the locations of beads
+        are flattened within that
+    clusterIDs: list [len M]    
+    typeIDs: list [len M]
+        indices that indicate different molecule types
+    """
+    def __init__(self, t, trajectory, ats, molno):
+        """ Initialize a Heterogeneous Cluster Snapshot object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trajectory: gsd.hoomd trajectory or numpy array 
+            numpy array is of size 4 + 3 * ats * molno 
+            (ats is different for optical and aligned clusters)
+        
+        ats: the number of beads in a single molecule
+        molno: the number of molecules in the system
+ 
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        
+        """
+        self.timestep = t
+        self.ats = ats
+
+        snapshot = trajectory[t]
+    
+        binds = np.argsort(snapshot.particles.body)
+        self.pos = snapshot.particles.position[binds]
+        sz = np.shape(self.pos)
+        if sz[0] % ats != 0:
+            raise RuntimeError("Number of particles not divisible by \
+                                number of beads per molecules.")
+        #pdb.set_trace()
+        self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+        
+        self.nclusts = molno
+        self.clusterIDs = range(int(sz[0] / ats))
+    
+    
         
 class OpticalClusterSnapshot(ContactClusterSnapshot):
     """Class for tracking the location of optical clusters at each time step"""
