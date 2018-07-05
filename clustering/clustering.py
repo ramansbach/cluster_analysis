@@ -1561,8 +1561,10 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
     clusterIDs: list [len M]    
     typeIDs: list [len M]
         indices that indicate different molecule types
+    rng: csr matrix or None
+        adjacency matrix of clusters
     """
-    def __init__(self, t, trajectory, ats, molno):
+    def __init__(self, t, trajectory, ats, molno,typelist):
         """ Initialize a Heterogeneous Cluster Snapshot object.
 
         Parameters
@@ -1575,7 +1577,8 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
         
         ats: the number of beads in a single molecule
         molno: the number of molecules in the system
- 
+        typelist: list 
+            of central bead types in snapshot
         Raises
         ------
         RuntimeError
@@ -1598,9 +1601,93 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
         self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
         
         self.nclusts = molno
-        self.clusterIDs = range(int(sz[0] / ats))
+        self.clusterIDs = -1*np.ones(int(sz[0] / ats)).astype(int)
+        m = sz[0] / ats
+        self.typeIDs = np.zeros(m).astype(int)
+        for t in range(len(typelist)):
+            ti = snapshot.particles.types.index(typelist[t])
+            tloc = np.argwhere(snapshot.particles.typeids == \
+                               snapshot.particles.types[ti])
+            self.typeIDs[tloc] = snapshot.particles.types[ti]
+        self.rng = None
     
+    def getClusterID(self, positions,cutoff,func):
+        """
+        Find the ID of which cluster each molecule is in
+
+        Parameters
+        ----------
+        cutoff: the squared distance molecules have to be within to be
+        part of the same cluster
+
+        Returns
+        -------
+        clusterIDs: numpy array of the cluster index of the cluster that
+        each molecule occupies
+        nclusts: number of clusters
+        BT: BallTree for possible other computations
+
+        """
+        sz = np.shape(positions)
+        pos3 = positions.reshape((int(sz[0]*sz[1]/3),3))
+        BT = BallTree(pos3,metric='euclidean')
+        rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
+        rng = squashRNGCOOCython(rng,int(sz[1]/3))
+        self.rng = rng
+        (nclusts,clusterIDs) = connected_components(rng,directed=False,
+                                            return_labels=True,
+                                            connection='weak')
+                                        
+        #pdb.set_trace()
+        return (nclusts,clusterIDs,BT)
     
+    def getIntermixByCluster(self):
+        """
+        Figure out the number of bonds between same types, the number of
+        bonds between different types, and the total number of bonds for
+        each cluster
+        
+        -------
+        Returns
+        -------
+        nbs: C x 4 numpy array of ints
+            col 1 is cluster size
+            col 2 is the number of connections between like molecules
+            col 3 is number of connections between unlike molecules
+            col 4 is number of total connections between molecules
+
+        ------
+        Raises
+        ------
+        Not Implemented Error: if rng is still set to None or clusterIDs are
+        still set to -1
+            
+        -----
+        Notes
+        -----
+        * should double-check for whether we need to divide by two for 
+        symmetric bonds
+        """
+        if self.rng is None:
+            raise NotImplementedError("Must set adjacency matrix first")
+        if self.clusterIDs[0] == -1:
+            raise NotImplementedError("Must set cluster IDs first")
+        binds = getIndsCsr(self.rng)
+        nbs = np.zeros((self.nclusts,4)).astype(int)
+        m = np.shape(binds)[0]
+        for i in range(m):
+            bi = binds[i,0]
+            bj = binds[i,1]
+            ti = self.typeIDs[bi]
+            tj = self.typeIDs[bj]
+            if ti == tj:
+                nbs[self.clusterIDs[bi],1] += 1
+            else:
+                nbs[self.clusterIDs[bi],2] += 1 
+            nbs[self.clusterIDs[bi],3] += 1
+        for i in range(self.nclusts):
+            nbs[i,0] = len(np.argwhere(self.clusterIDs)==i)
+        return nbs
         
 class OpticalClusterSnapshot(ContactClusterSnapshot):
     """Class for tracking the location of optical clusters at each time step"""
@@ -1683,7 +1770,78 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
                 self.pos = float('NaN') * self.pos
             self.nclusts = molno
             self.clusterIDs = range(int(sz[0] / ats))
-    
+            
+class OpticalClusterHeteroSnapshot(ContactClusterHeteroSnapshot):
+    """Class for tracking the location of optical clusters at each time step
+    for a heterogeneous system    
+    """
+    def __init__(self, t, trajectory, ats, molno, typelist, atype=u'LS'):
+        """ Initialize a ClusterSnapshot object.
+
+        Parameters
+        ----------
+        t: timestep
+
+        trajectory: gsd.hoomd trajectory or numpy array 
+            numpy array is of size 4 + 3 * ats * molno 
+            (ats is different for optical and aligned clusters)
+        
+        ats: the number of aromatics in a single molecule
+        molno: the number of molecules in the system
+        compairs: m x n numpy array
+            these are the comparative indices of the beads making up each
+            aromatic group, where m is the number of aromatics and n is the
+            number of beads in the group, eg for two beads representing a
+            ring in the 3-core model, this should be
+            [[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]] 
+        typelist: list
+            list of different molecule types should be u'EA', u'EB' or similar
+        atype: hoomd bead type
+            should be the type referring to the aromatic beads
+        Raises
+        ------
+        RuntimeError
+            if the number of particles does not divide evenly up into molecules
+        
+        Notes
+        -----
+        You can create a ClusterSnapshot object from either an array (for use
+        with MPI) or from a HOOMD trajectory
+        
+        An optical cluster snapshot tracks the positions of the COMs of the
+        optical clusters, rather than the positions of the separate beads,
+        as the contact cluster does
+        """
+        self.timestep = t
+        self.ats = ats
+        
+        snapshot = trajectory[t]
+        
+        
+        #self.pos = self.getComs(compairs,atype,trajectory[t],molno)
+        tind = snapshot.particles.types.index(atype)
+        types = snapshot.particles.typeid
+   
+        self.pos = \
+        snapshot.particles.position[np.where(types==tind)[0]]
+        sz = np.shape(self.pos)
+        if sz[0] % ats != 0:
+            raise RuntimeError("Number of particles not divisible by \
+                                number of beads per molecules.")
+        self.pos = np.reshape(self.pos,[sz[0] / ats , 3 * ats])
+        
+        self.nclusts = molno
+        self.clusterIDs = range(int(sz[0] / ats))
+        self.clusterIDs = -1*np.ones(int(sz[0] / ats)).astype(int)
+        m = sz[0] / ats
+        self.typeIDs = np.zeros(m).astype(int)
+        for t in range(len(typelist)):
+            ti = snapshot.particles.types.index(typelist[t])
+            tloc = np.argwhere(snapshot.particles.typeids == \
+                               snapshot.particles.types[ti])
+            self.typeIDs[tloc] = snapshot.particles.types[ti]
+        self.rng = None
+        
 class AlignedClusterSnapshot(OpticalClusterSnapshot):
     """Class for tracking the location of aligned clusters at each time step"""
     
