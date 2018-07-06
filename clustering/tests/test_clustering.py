@@ -765,7 +765,68 @@ def test_get_csr_inds2():
                        [2,4],
                        [3,5]])
     bonds = cl.getIndsCsr(matcsr)
-    npt.assert_array_equal(bonds,abonds)                
+    npt.assert_array_equal(bonds,abonds)     
+
+"""test intermix function"""
+
+def test_intermix1():
+
+    fname = 'dummyfull2type_run1.gsd'
+    traj = gsd.hoomd.open(op.join(data_path,fname))
+    compairs = np.array([[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]])
+    molno = 4
+    contactcut = 1.1*1.1
+    opticalcut = 0.35*0.35
+    ats = {'contact':17,'optical':12} 
+    cutoff = {'contact':contactcut,'optical':opticalcut}
+    Syst = cl.SnapSystem(traj, ats, molno, cutoff, 
+                 compairs=compairs,
+                 atype='AB',ttotal=6,tstart=0,
+                 het=True,typelist=[u'EA',u'EB'])
+    
+    boxL = traj[0].configuration.box[0]
+    Syst.get_clusters_serial('contact',boxL)
+    Syst.get_clusters_serial('optical',boxL)
+    intermixlistC = Syst.writeIntermix('contact',
+                                      'dummyfull2type_run1_cImix.dat',
+                                      returnmat=True)
+    intermixlistO = Syst.writeIntermix('optical',
+                                      'dummyfull2type_run1_oImix.dat',
+                                      returnmat=True)       
+    iC0 = np.array([[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0]])
+    iC1 = np.array([[2,0,1,1],[2,0,1,1]])
+    iC2 = np.array([[4,1,2,3]])
+    iC3 = np.array([[4,0,4,4]])
+    iC4 = np.array([[4,1,4,5]])
+    iC5 = np.array([[4,2,4,6]])
+    iCs = [iC0,iC1,iC2,iC3,iC4,iC5]
+    iO0 = iC0
+    iO1 = np.array([[1,0,0,0],[1,0,0,0],[2,0,1,1]])
+    iO2 = np.array([[2,0,1,1],[2,0,1,1]])
+    iO3 = np.array([[2,0,1,1],[2,0,1,1]])
+    iO4 = np.array([[4,1,2,3]])
+    iO5 = np.array([[4,2,2,4]])
+    iOs = [iO0,iO1,iO2,iO3,iO4,iO5]
+
+    npt.assert_array_equal(iCs[0],intermixlistC[0])
+    npt.assert_array_equal(iOs[0],intermixlistO[0])
+    
+    npt.assert_array_equal(iCs[1],intermixlistC[1])
+    npt.assert_array_equal(iOs[1],intermixlistO[1])
+    
+  
+    npt.assert_array_equal(iCs[2],intermixlistC[2])
+    npt.assert_array_equal(iOs[2],intermixlistO[2])
+    
+    npt.assert_array_equal(iCs[3],intermixlistC[3])
+    npt.assert_array_equal(iOs[3],intermixlistO[3])
+    
+    npt.assert_array_equal(iCs[4],intermixlistC[4])
+    npt.assert_array_equal(iOs[4],intermixlistO[4])
+    
+    npt.assert_array_equal(iCs[5],intermixlistC[5])
+    npt.assert_array_equal(iOs[5],intermixlistO[5])
+                
 """
 def test_valid_metric():
     loop = 10
@@ -794,36 +855,4 @@ def test_valid_metric():
             pdb.set_trace()
 """
 if __name__ == "__main__":
-    '''
-    test_get_clusters_serial_full()
-    
-    test_dummyfull()
-      
-    test_getComs()
-    
-    test_OpticalClusterSnapshot_init()
-    '''
-    test_pyCEquality()
-    '''
-    test_ClusterSnapshot_init()
-    
-    test_MPI()
-    test_get_clusters_serial()
-    test_writeCID()
-    
-    test_ContactClusterSnapshot_init()
-    
-    test_conOptDistC()
-    
-    test_clusterPackAndUnpack()
-    test_dummy8()
-    
-    test_mu2()
-    
-    test_get_clusters_serial()
-    test_mu2vtime()
-    test_writeCID()
-    test_writeSizes()
-    
-    test_alignedDistance()
-    '''
+    test_intermix1()

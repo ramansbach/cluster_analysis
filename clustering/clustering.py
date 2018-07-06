@@ -597,7 +597,8 @@ class SnapSystem(object):
                          'optical':conOptDistanceCython,
                          'aligned':alignDistancesCython}, 
                  compairs=np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]),
-                 atype=u'LS',ttotal=-1,tstart=0,tpr=None,outGro='conf'):
+                 atype=u'LS',ttotal=-1,tstart=0,tpr=None,outGro='conf',
+                 het=False,typelist=None):
         """ Initialize a full system of gsd snapshots over a trajectory.
 
         Parameters
@@ -636,6 +637,9 @@ class SnapSystem(object):
             
         outGro: string
             name of file to safe individual gro files to
+            
+        het: bool
+            whether the system is heterogeneous or not, False by default
         
         Attributes
         ----------
@@ -657,6 +661,8 @@ class SnapSystem(object):
             with NaN positions to make Scatter work correctly.
         atype = label
             referring to how aromatic beads are labeled in the trajectory
+        typelist: list
+            list of different types of central beads, by default None
         comm: MPI communicator
         
         ------
@@ -752,7 +758,10 @@ class SnapSystem(object):
             for ctype in cldict.keys():
                 if ctype == 'contact':
                     if type(traj) is str:
+                        if het:
+                                raise NotImplementedError("No code instantiated for heterogeneous system in Gromacs yet.")
                         if ext == 'gro':
+                            
                             clusters = [ContactClusterSnapshotXTC(t, traj, ats, 
                                                             molno) \
                                     for t in range(tstart,ttotal+tstart)]
@@ -772,11 +781,20 @@ class SnapSystem(object):
                                         for t in range(tstart,ttotal+tstart)]
                              
                     else:
-                        clusters = \
-                        [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
+                        if het:
+                            clusters = [ContactClusterHeteroSnapshot(t,traj,
+                                                                    ats[ctype],
+                                                                     molno,
+                                                                     typelist)\
+                                        for t in range(tstart,ttotal+tstart)]    
+                        else:
+                            clusters = \
+                            [ContactClusterSnapshot(t,traj,ats[ctype],molno) \
                                 for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'optical':
                     if type(traj) is str:
+                        if het:
+                            raise NotImplementedError("No heterogeneous implementation for Gromacs trajectories yet.")
                         if ext == 'gro':
                             clusters = [OpticalClusterSnapshotXTC(t,traj,ats,
                                                               molno,compairs) \
@@ -796,8 +814,16 @@ class SnapSystem(object):
                                             compairs) \
                                         for t in range(tstart,ttotal+tstart)]
                     else:
-                        clusters = \
-                        [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
+                        if het:
+                            clusters = [OpticalClusterHeteroSnapshot(t,traj,
+                                                                    ats[ctype],
+                                                                     molno,
+                                                                     typelist,
+                                                                atype=atype) \
+                                        for t in range(tstart,ttotal+tstart)]
+                        else:
+                            clusters = \
+                            [OpticalClusterSnapshot(t,traj,ats[ctype],molno,
                                                        atype=atype) \
                                         for t in range(tstart,ttotal+tstart)]
                 elif ctype == 'aligned':
@@ -1164,8 +1190,65 @@ class SnapSystem(object):
                         fid.write('{0} '.format(csize))
                     fid.write('\n')
             fid.close()
+    
+    def writeIntermix(self,ctype,fname,returnmat=False):
+        """ Write out the intermix values as a file that can be opened
+        and loaded later
         
-        
+        ----------
+        Parameters
+        ----------
+        ctype: string
+            cluster type
+        fname:
+            file name to write to
+        returnmat: bool
+            whether to create and return a matrix of these values, useful for
+            debugging or further data analysis in python, default False
+
+        -------
+        Returns
+        -------
+        intermixlist: 
+            list with T entries of arrays of varying size
+            
+            
+        ------
+        Raises
+        ------
+        NotImplementedError
+            if the cluster type is one that hasn't been programmed yet
+            
+        -----
+        Notes
+        -----
+        writes to file R lines
+            where R = T*sum_i C_i(t), where C_i is the number of clusters at 
+            type step i
+            column 1 is the timestep
+            column 2 is the cluster size
+            column 3 is the number of bonds between similar types
+            column 4 is the number of bonds between different types
+            column 5 is the number of total bonds (sum of 3 and 4)
+        """
+        intermixlist = []
+        if ctype not in self.clsnaps.keys():
+            raise NotImplementedError("Unknown cluster type in intermix")
+        if self.comm.Get_rank() == 0:
+            fid = open(fname,'w')
+            clsnaps = self.clsnaps[ctype]
+            t = 0
+            for clsnap in clsnaps:
+                intermix = clsnap.getIntermixByCluster()
+                if returnmat:
+                    intermixlist.append(intermix)
+                for c in range(np.shape(intermix)[0]):
+                    fid.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(t,
+                              intermix[c,0],intermix[c,1],intermix[c,2],
+                              intermix[c,3]))
+                t += 1
+            fid.close()
+        return intermixlist
 class ClusterSnapshot(object):
     """Class for tracking the location of clusters at each time step"""
     
@@ -1606,9 +1689,8 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
         self.typeIDs = np.zeros(m).astype(int)
         for t in range(len(typelist)):
             ti = snapshot.particles.types.index(typelist[t])
-            tloc = np.argwhere(snapshot.particles.typeids == \
-                               snapshot.particles.types[ti])
-            self.typeIDs[tloc] = snapshot.particles.types[ti]
+            tloc = np.argwhere(snapshot.particles.typeid == ti)
+            self.typeIDs[snapshot.particles.body[tloc]] = ti
         self.rng = None
     
     def getClusterID(self, positions,cutoff,func):
@@ -1632,6 +1714,7 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
         pos3 = positions.reshape((int(sz[0]*sz[1]/3),3))
         BT = BallTree(pos3,metric='euclidean')
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
+
         rng = squashRNGCOOCython(rng,int(sz[1]/3))
         self.rng = rng
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
@@ -1685,8 +1768,13 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
             else:
                 nbs[self.clusterIDs[bi],2] += 1 
             nbs[self.clusterIDs[bi],3] += 1
+
+        
         for i in range(self.nclusts):
-            nbs[i,0] = len(np.argwhere(self.clusterIDs)==i)
+            nbs[i,0] = len(np.argwhere(self.clusterIDs==i))
+            for j in range(1,4):
+                nbs[i,j] = int(nbs[i,j]) / 2 #remove double-counting
+            
         return nbs
         
 class OpticalClusterSnapshot(ContactClusterSnapshot):
@@ -1837,9 +1925,8 @@ class OpticalClusterHeteroSnapshot(ContactClusterHeteroSnapshot):
         self.typeIDs = np.zeros(m).astype(int)
         for t in range(len(typelist)):
             ti = snapshot.particles.types.index(typelist[t])
-            tloc = np.argwhere(snapshot.particles.typeids == \
-                               snapshot.particles.types[ti])
-            self.typeIDs[tloc] = snapshot.particles.types[ti]
+            tloc = np.argwhere(snapshot.particles.typeid == ti)
+            self.typeIDs[snapshot.particles.body[tloc]] = ti
         self.rng = None
         
 class AlignedClusterSnapshot(OpticalClusterSnapshot):
