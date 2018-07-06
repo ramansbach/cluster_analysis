@@ -55,7 +55,7 @@ colors = {'contact':'red','optical':'blue'}
 fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
         +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run' #template of .gsd file name
 
-fnames = []
+fnames = [fbase + r + '.gsd' for r in runs]
 start = time()    
 traj = gsd.hoomd.open(fname)
 box = traj[0].configuration.box[0:3]
