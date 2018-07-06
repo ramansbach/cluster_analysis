@@ -1769,11 +1769,11 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
                 nbs[self.clusterIDs[bi],2] += 1 
             nbs[self.clusterIDs[bi],3] += 1
 
-        
+        #if self.timestep > 0:
+        #    pdb.set_trace()
         for i in range(self.nclusts):
             nbs[i,0] = len(np.argwhere(self.clusterIDs==i))
-            for j in range(1,4):
-                nbs[i,j] = int(nbs[i,j]) / 2 #remove double-counting
+            
             
         return nbs
         

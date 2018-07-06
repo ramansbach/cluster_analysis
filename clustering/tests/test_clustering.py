@@ -769,7 +769,7 @@ def test_get_csr_inds2():
 
 """test intermix function"""
 
-def test_intermix1():
+def test_intermixsetup():
 
     fname = 'dummyfull2type_run1.gsd'
     traj = gsd.hoomd.open(op.join(data_path,fname))
@@ -807,26 +807,55 @@ def test_intermix1():
     iO4 = np.array([[4,1,2,3]])
     iO5 = np.array([[4,2,2,4]])
     iOs = [iO0,iO1,iO2,iO3,iO4,iO5]
-
+    return (intermixlistC,intermixlistO,iCs,iOs)
+    
+def test_intermixC0():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iCs[0],intermixlistC[0])
+    
+def test_intermixO0():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iOs[0],intermixlistO[0])
     
+def test_intermixC1():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iCs[1],intermixlistC[1])
+    
+def test_intermixO1():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iOs[1],intermixlistO[1])
     
-  
+def test_intermixC2():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iCs[2],intermixlistC[2])
+    
+def test_intermixO2():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iOs[2],intermixlistO[2])
     
+def test_intermixC3():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iCs[3],intermixlistC[3])
-    npt.assert_array_equal(iOs[3],intermixlistO[3])
     
+def test_intermixO3():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
+    npt.assert_array_equal(iOs[3],intermixlistO[3])
+
+def test_intermixC4():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iCs[4],intermixlistC[4])
+    
+def test_intermixO4():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iOs[4],intermixlistO[4])
     
+def test_intermixC5():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iCs[5],intermixlistC[5])
+    
+def test_intermixO5():
+    (intermixlistC,intermixlistO,iCs,iOs) = test_intermixsetup()
     npt.assert_array_equal(iOs[5],intermixlistO[5])
-                
 """
 def test_valid_metric():
     loop = 10
