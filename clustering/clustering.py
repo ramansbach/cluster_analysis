@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-import pandas as pd
 import gsd.hoomd
 import sklearn
 import scipy.optimize as opt
@@ -1297,7 +1296,9 @@ class ContactClusterSnapshot(ClusterSnapshot):
         locations of molecules and beads within molecules
         each molecule is its own line and then the locations of beads
         are flattened within that
-    clusterIDs: list [len M]    
+    clusterIDs: list [len M]   
+    box: 1 x 6 numpy array
+        defines triclinic box
     """
    
     def __init__(self, t, trajectory, ats, molno):
@@ -1327,6 +1328,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         """
         self.timestep = t
         self.ats = ats
+        self.box = None
         if type(trajectory) is np.ndarray:
             carray = trajectory
             self.timestep = int(carray[0])
@@ -1339,7 +1341,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         else:
             if t != -1: 
                 snapshot = trajectory[t]
-            
+                self.box = snapshot.configuration.box
                 binds = np.argsort(snapshot.particles.body)
                 self.pos = snapshot.particles.position[binds]
                 sz = np.shape(self.pos)
@@ -1497,7 +1499,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
             clustSizes[cid] = dcounts[self.clusterIDs[cid]]
         return clustSizes
     
-    def fixPBC(self,cID,cutoff,box,func,writegsd=None,BT=None):
+    def fixPBC(self,cID,cutoff,writegsd=None,BT=None):
         """
         return positions for a particular cluster fixed across PBCs for 
         calculation of structural metrics like end-to-end length
@@ -1511,10 +1513,6 @@ class ContactClusterSnapshot(ClusterSnapshot):
         writegsd: bool
             if not none, write out a gsd file to this name that shows the
             resultant cluster
-        box: 1x3 numpy array
-            box side lengths
-        func: python function
-            distance metric for BallTree computation
         BT: precomputed BallTree for cluster
             if this is none, recompute the BallTree
             
@@ -1536,7 +1534,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         inds = np.where(self.clusterIDs==cID)[0]
         positions = self.pos[inds,:]
         sz = np.shape(positions)
-        
+        box = self.box[0:3]
         
         fixedXYZ = positions.copy()
         potInds = range(1,int(sz[0]))
@@ -1609,12 +1607,12 @@ class ContactClusterSnapshot(ClusterSnapshot):
             inds = np.where(self.clusterIDs==cID)[0]
             if len(inds) > 1:
                 if writegsd is not None:
-                    cIDpos = self.fixPBC(cID,cutoff,box,func,
+                    cIDpos = self.fixPBC(cID,cutoff,
                                          writegsd=writegsd+str(cID)+'.gsd',
                                          BT=BT)
                 else:
                     
-                    cIDpos = self.fixPBC(cID,cutoff,box,func,BT=BT)
+                    cIDpos = self.fixPBC(cID,cutoff,BT=BT)
                 sz = np.shape(cIDpos)
                 #extract COM positions
                 xcom = np.sum(cIDpos[:,range(0,sz[1],3)],axis=1)/(sz[1]/3.)
@@ -1625,6 +1623,170 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 
                 ldistrib[inds] = endendl
         return ldistrib
+        
+    def gyrTensPy(self,posList):
+        """
+        Function that computes the gyration tensor of a subset of atoms
+        in a cluster
+        
+        ----------
+        Parameters
+        ----------
+        posList: numpy array
+            list of positions involved in computation
+        """
+        gT = np.zeros([3,3])
+        for i in range(3):
+            for j in range(3):
+                gT[i][j] = self.gyrTensxy(posList,i,j,self.box[i],self.box[j])
+        return gT
+	
+
+    def gyrTensxy(self,posList,x,y,boxlx,boxly):
+        """
+        Compute in Python the gyration tensor entry at position (x,y)
+        
+        ----------
+        Parameters
+        ----------
+        posList: numpy array
+            the positions of the relevant beads/atoms
+        x: int
+            position 1 in tensor
+        y: int
+            position 2 in tensor
+        boxlx: float
+            box length in first direction
+        boxly: float
+            box length in second direction
+        
+        -------
+        Returns
+        -------
+        gxy: float
+            gyration tensor entry G[x,y]
+            
+        ------
+        Raises
+        ------
+        ValueError
+            if posList doesn't divide evenly by three
+        """
+        gxy = 0
+        if len(posList) % 3 !=0:
+            raise ValueError("position list should divide evenly by 3")
+        N = int(len(posList)/3)
+        for R in range(N):
+            for S in range(N):
+                V = posList[3*R+x]-posList[3*S+x]
+                V = V - boxlx*round(V/boxlx)
+                U = posList[3*R+y]-posList[3*S+y]
+                U = U - boxly*round(U/boxly)
+                #print U,V
+                gxy = gxy + V*U
+        gxy = gxy/(2*N**2)
+        return gxy
+        
+    def gyrPrinc(self,aposFix):
+        """
+        find and return the principal component of the gyration tensor
+        
+        ----------
+        Parameters
+        ----------
+        aposFix: numpy array
+            list of relevant positions
+        
+        -------
+        Returns
+        -------
+        g1: 1 x 3 numpy array
+            the principal eigenvector corresponding to the first principal
+            moment of the gyration tensor
+        """
+        gTens = self.gyrTensPy(aposFix)
+        (eigval,eigvec) = np.linalg.eig(gTens)
+        eigOrder = np.argsort(-1*eigval)
+        eigvec = eigvec[:,eigOrder]
+        g1 = eigvec[:,0]
+        
+        return g1
+        
+    def angSpread(self,cutoff,ainds,tol=1e-16):
+        """
+        For each cluster, compute the spread of aromatics angles perpendicular
+        to the gyration tensor of the cluster based on the aromatics but not
+        the side chains
+        
+        ----------
+        Parameters
+        ----------
+        cutoff: float
+            cutoff within which to search for neighbors when unwrapping cluster
+        ainds: list of ints
+            the indices of the beads/atoms participating in the aromatics
+        tol: float
+            defaults to 1e-16
+            the tolerance below which we assume there is no perpendicular 
+            component and assign an angle of 0
+        -------
+        Returns
+        -------        
+        angSpreadMat: C x 3 numpy array
+            C = number of clusters
+            col0 = size of cluster
+            col1 = spread of perpendicular angles
+            col2 = average length of projection onto the gyration tensor
+        -----
+        Notes
+        -----
+        Angles can only be between 0 and pi/2 due to vector restriction
+        """
+        uCIDs = np.unique(self.clusterIDs)
+        angSpreadMat = np.zeros((len(uCIDs),3))
+        tinds = np.zeros(3*len(ainds)).astype(int)
+        ind = 0
+        for aind in ainds:
+            aind3 = np.arange(3*aind,(3*aind+3))
+            tinds[ind:ind+3] = aind3
+            ind += 3
+        ainds = tinds
+        for clustID in uCIDs:
+            csize = len(np.argwhere(self.clusterIDs == clustID))
+            angSpreadMat[clustID,0] = csize            
+            posFix = self.fixPBC(clustID,cutoff)
+            aposFix = posFix[:,ainds]
+            gclust1 = self.gyrPrinc(aposFix.reshape(np.shape(aposFix)[0] \
+                                                    * np.shape(aposFix)[1]))
+            gmol0 = self.gyrPrinc(aposFix[0,:])
+            ngclust1 = np.linalg.norm(gclust1)
+            dgr0 = np.dot(gclust1,gmol0)
+            rperp0 = gmol0 - dgr0*gclust1
+            rperph0 = rperp0 / np.linalg.norm(rperp0)
+            
+            thlsmat = np.zeros((csize,2))
+            for mol in range(0,np.shape(aposFix)[0]):
+                gmol = self.gyrPrinc(aposFix[mol,:])
+                dgr = np.dot(gclust1,gmol)
+                lpar = dgr / ngclust1
+                rperp = gmol - dgr*gclust1
+                rperpn = np.linalg.norm(rperp)
+                if rperpn > tol:
+                    rperph = rperp / np.linalg.norm(rperp)
+                    thperp = np.arccos(np.abs(np.dot(rperph,rperph0)))
+                else:
+                    thperp = 0.
+                thlsmat[mol,0] = thperp
+                thlsmat[mol,1] = lpar
+                #pdb.set_trace()
+            #pdb.set_trace()
+            if csize == 1:
+                ddof = 0
+            else:
+                ddof = 1
+            angSpreadMat[clustID,1] = np.std(thlsmat[:,0],ddof=ddof)
+            angSpreadMat[clustID,2] = np.mean(thlsmat[:,1])
+        return angSpreadMat
         
 class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
     """
@@ -1673,7 +1835,7 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
         self.ats = ats
 
         snapshot = trajectory[t]
-    
+        self.box = snapshot.configuration.box
         binds = np.argsort(snapshot.particles.body)
         self.pos = snapshot.particles.position[binds]
         sz = np.shape(self.pos)
@@ -1818,6 +1980,7 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
         """
         self.timestep = t
         self.ats = ats
+        self.box = None
         if type(trajectory) is np.ndarray:
             carray = trajectory
             self.timestep = int(carray[0])
@@ -1835,7 +1998,7 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
                 #self.pos = self.getComs(compairs,atype,trajectory[t],molno)
                 tind = snapshot.particles.types.index(atype)
                 types = snapshot.particles.typeid
-       
+                self.box = snapshot.configuration.box
                 self.pos = \
                 snapshot.particles.position[np.where(types==tind)[0]]
                 sz = np.shape(self.pos)
@@ -1904,7 +2067,7 @@ class OpticalClusterHeteroSnapshot(ContactClusterHeteroSnapshot):
         self.ats = ats
         
         snapshot = trajectory[t]
-        
+        self.box = snapshot.configuration.box
         
         #self.pos = self.getComs(compairs,atype,trajectory[t],molno)
         tind = snapshot.particles.types.index(atype)
@@ -2029,7 +2192,7 @@ class AlignedClusterSnapshot(OpticalClusterSnapshot):
         """
         self.timestep = t
         self.ats = ats
-        
+        self.box = None
         if type(trajectory) is np.ndarray:
             carray = trajectory
             self.timestep = int(carray[0])
@@ -2316,7 +2479,7 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         self.ats = ats
         self.nclusts = molno
         self.clusterIDs = np.zeros(molno)
-        self.pos = self.readGro(trj)[0]
+        (self.pos,self.box) = self.readGro(trj)
         
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
@@ -2385,6 +2548,7 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
         self.nclusts = molno
         self.clusterIDs = np.zeros(molno)
         (self.pos,boxL) = self.readGro(trj)
+        self.box = boxL
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()

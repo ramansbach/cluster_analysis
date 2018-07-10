@@ -37,7 +37,7 @@ ttotal = 1 #total number of timesteps
 tstart = 0 #what time to start at, can start t > 0 to eliminate equilibration
 ats = {'contact':17,'optical':12} #number of molecules associated with analysis of a monomer
 molno = 10240 #total number of molecules in the system
-c1=float(BBB) #cutoff for contact clusters (in nm)
+c1=float(max(BBBA),max(BBBB)) #cutoff for contact clusters (in nm)
 c2=0.35 #cutoff for optical clusters (in nm)
 c1 = max(1.1,(c1/100.)*1.1225+0.1)
 cs={'contact':c1,'optical':c2}
@@ -46,15 +46,15 @@ compairs = np.array([[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]])#indices of optical 
 molnolabel = 10000 #label of beginning of file name
 AAdlabel = AAA #A bead parameter label
 SCdlabel = SCSCSC #SC bead parameter label
-BBdlabel = BBB #BB bead parameter label
+BBdlabel = BBBB #BB bead parameter label
 dt = 1.0 #assumed timestep
 atype = u'LS' #optical/aligned bead type
 colors = {'contact':'red','optical':'blue'}
 
 typelist = [u'EA',u'EB']
 
-fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-'\
-        +str(SCdlabel)+'-'+str(BBdlabel)+'_short_run' #template of .gsd file name
+fbase = 'mols'+str(molnolabel)+'_' + str(AAdlabel)+'-02-'\
+        +str(SCdlabel)+'-150-'+str(BBdlabel)+'_short_run' #template of .gsd file name
 
 fnames = [fbase + r + '.gsd' for r in runs]
 start = time()    
