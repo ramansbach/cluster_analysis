@@ -72,7 +72,8 @@ REQUIRES = ["numpy","scipy","Cython","scikit"]
 BEXT = {'build_ext': build_ext}
 CYTHONMODS=[Extension("cdistances",
                       sources=["cdistances.pyx","conoptdistance.c",
-                               "aligndistance.c","subsquashrng.c"],
+                               "aligndistance.c","subsquashrng.c",
+                               "gyrtensxy.c"],
                       include_dirs=[numpy.get_include()]),
            Extension("cfractald",
                      sources=["cfractald.pyx","corrdim.c","getcoms.c"],

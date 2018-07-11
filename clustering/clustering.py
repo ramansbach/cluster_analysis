@@ -17,7 +17,7 @@ from scipy.sparse import csr_matrix,lil_matrix,coo_matrix
 from .smoluchowski import massAvSize
 from mpi4py import MPI
 from cdistances import conOptDistanceCython,alignDistancesCython,subsquashRNG
-from cdistances import squashRNGCOOCython
+from cdistances import squashRNGCOOCython,gyrTensxyCy
 
 
 __all__ = ["ClusterSnapshot", "ContactClusterSnapshot",
@@ -1248,6 +1248,43 @@ class SnapSystem(object):
                 t += 1
             fid.close()
         return intermixlist
+        
+    def writeAngSpread(self,ctype,fname,ainds):
+        """
+        Write to file the angle spread data for each (t,c) pair where t is
+        the timestep and c is the cluster size
+        
+        ----------
+        Parameters
+        ----------
+        ctype: string
+            cluster type
+        fname: string
+            name of file to write to
+        ainds: list of ints
+            the indices of the aromatic beads
+        ------
+        Raises
+        ------
+        NotImplementedError:
+            if the cluster type is unknown
+        """
+        if ctype not in self.clsnaps.keys():
+            raise NotImplementedError("Unknown cluster type in angspread")
+        cutoff = self.cldict[ctype]
+        t = 0
+        if self.comm.Get_rank() == 0:
+            fid = open(fname,'w')
+            clsnaps = self.clsnaps[ctype]
+            for clsnap in clsnaps:
+                angspreadmat = clsnap.angSpread(cutoff,ainds)
+                for i in range(np.shape(angspreadmat)[0]):
+                    fid.write('{0}\t{1}\t{2}\t{3}\n'.format(t,
+                              angspreadmat[i,0],angspreadmat[i,1],
+                              angspreadmat[i,2]))
+            t += 1
+            fid.close()
+        
 class ClusterSnapshot(object):
     """Class for tracking the location of clusters at each time step"""
     
@@ -1634,11 +1671,19 @@ class ContactClusterSnapshot(ClusterSnapshot):
         ----------
         posList: numpy array
             list of positions involved in computation
+        ------
+        Raises
+        ------
+        ValueError
+        if posList doesn't divide evenly by three
         """
+        
+        if len(posList) % 3 !=0:
+            raise ValueError("position list should divide evenly by 3")
         gT = np.zeros([3,3])
         for i in range(3):
             for j in range(3):
-                gT[i][j] = self.gyrTensxy(posList,i,j,self.box[i],self.box[j])
+                gT[i][j] = gyrTensxyCy(posList,i,j,self.box[i],self.box[j])
         return gT
 	
 
@@ -1737,6 +1782,12 @@ class ContactClusterSnapshot(ClusterSnapshot):
             col0 = size of cluster
             col1 = spread of perpendicular angles
             col2 = average length of projection onto the gyration tensor
+            
+        ------
+        Raises
+        ------
+        ValueError:
+            if the argument to arccos is > 1 or NaN
         -----
         Notes
         -----
@@ -1758,34 +1809,54 @@ class ContactClusterSnapshot(ClusterSnapshot):
             aposFix = posFix[:,ainds]
             gclust1 = self.gyrPrinc(aposFix.reshape(np.shape(aposFix)[0] \
                                                     * np.shape(aposFix)[1]))
-            gmol0 = self.gyrPrinc(aposFix[0,:])
+                                                                
             ngclust1 = np.linalg.norm(gclust1)
-            dgr0 = np.dot(gclust1,gmol0)
-            rperp0 = gmol0 - dgr0*gclust1
-            rperph0 = rperp0 / np.linalg.norm(rperp0)
             
-            thlsmat = np.zeros((csize,2))
-            for mol in range(0,np.shape(aposFix)[0]):
-                gmol = self.gyrPrinc(aposFix[mol,:])
-                dgr = np.dot(gclust1,gmol)
-                lpar = dgr / ngclust1
-                rperp = gmol - dgr*gclust1
-                rperpn = np.linalg.norm(rperp)
-                if rperpn > tol:
-                    rperph = rperp / np.linalg.norm(rperp)
-                    thperp = np.arccos(np.abs(np.dot(rperph,rperph0)))
-                else:
-                    thperp = 0.
-                thlsmat[mol,0] = thperp
-                thlsmat[mol,1] = lpar
+            rperpn0 = 0.
+            i0 = 0
+            skipflag = False
+            while rperpn0 < tol:
+                gmol0 = self.gyrPrinc(aposFix[i0,:])
+                dgr0 = np.dot(gclust1,gmol0)
+                rperp0 = gmol0 - dgr0*gclust1
+                rperpn0 = np.linalg.norm(rperp0)
+                i0 += 1
+                if i0 == np.shape(aposFix)[0]:
+                    angSpreadMat[clustID,1] = 0.
+                    angSpreadMat[clustID,2] = 1.
+                    skipflag = True
+                    break
+            if not skipflag:
+                
+                rperph0 = rperp0 / np.linalg.norm(rperp0)
+                thlsmat = np.zeros((csize,2))
+                for mol in range(0,np.shape(aposFix)[0]):
+                    gmol = self.gyrPrinc(aposFix[mol,:])
+                    dgr = np.dot(gclust1,gmol)
+                    lpar = dgr / ngclust1
+                    rperp = gmol - dgr*gclust1
+                    rperpn = np.linalg.norm(rperp)
+                    if rperpn > tol:
+                        rperph = rperp / np.linalg.norm(rperp)
+                        drperp = np.abs(np.dot(rperph,rperph0))
+                        if drperp > 1 and drperp < 1 + 10*tol:
+                            drperp = 1.
+                        if drperp > 1. or drperp is np.nan:
+                            #pdb.set_trace()
+                            raise ValueError("Cannot take arccos of value > 1")
+                        thperp = np.arccos(drperp)
+                    else:
+                        thperp = 0.
+                    thlsmat[mol,0] = thperp
+                    thlsmat[mol,1] = lpar
+                    #pdb.set_trace()
                 #pdb.set_trace()
-            #pdb.set_trace()
-            if csize == 1:
-                ddof = 0
-            else:
-                ddof = 1
-            angSpreadMat[clustID,1] = np.std(thlsmat[:,0],ddof=ddof)
-            angSpreadMat[clustID,2] = np.mean(thlsmat[:,1])
+                if csize == 1:
+                    ddof = 0
+                else:
+                    ddof = 1
+                angSpreadMat[clustID,1] = np.std(thlsmat[:,0],ddof=ddof)
+                angSpreadMat[clustID,2] = np.mean(thlsmat[:,1])
         return angSpreadMat
         
 class ContactClusterHeteroSnapshot(ContactClusterSnapshot):

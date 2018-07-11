@@ -16,6 +16,10 @@ cdef extern double aligndistance ( double * dists, double * distsA,
                                   int ats)
 cdef extern void subsquashrng ( double * rng, double * molrng, int dim,
                                int apermol)
+                               
+cdef extern double gyrtensxy ( double * poslist, int N, int x, int y,
+                              double boxlx, 
+                              double boxly)
 #@cython.boundscheck(False)
 #@cython.wraparound(False)
 def checkSymmetry(csr):
@@ -34,7 +38,8 @@ def checkSymmetry(csr):
 
     symyes = not (csr!=csr.transpose()).max()
     return symyes
-def conOptDistanceCython(np.ndarray[double,ndim=1,mode="c"] x not None,np.ndarray[double,ndim=1,mode="c"] y not None):
+def conOptDistanceCython(np.ndarray[double,ndim=1,mode="c"] x not None,
+                         np.ndarray[double,ndim=1,mode="c"] y not None):
     
     if len(x) % 3 != 0 or len(y) % 3 != 0:
         raise RuntimeError("3D array has a number of entries not divisible \
@@ -44,7 +49,8 @@ def conOptDistanceCython(np.ndarray[double,ndim=1,mode="c"] x not None,np.ndarra
     mind = conoptdistance(&x[0],&y[0],ats)
     return mind
 
-def alignDistancesCython(np.ndarray[double,ndim=1,mode="c"] x not None,np.ndarray[double,ndim=1,mode="c"] y not None):
+def alignDistancesCython(np.ndarray[double,ndim=1,mode="c"] x not None,
+                         np.ndarray[double,ndim=1,mode="c"] y not None):
     if len(x) % 3 != 0 or len(y) % 3 != 0:
         raise RuntimeError("3D array has a number of entries not divisible \
                             by 3.")
@@ -63,7 +69,39 @@ def subsquashRNG( rng,
     cdef np.ndarray[double,ndim=2,mode="c"] molrngc = np.array(molrng)
     subsquashrng(&rngc[0,0],&molrngc[0,0],dim,apermol)
     return molrngc
+
+def gyrTensxyCy(poslist, int x, 
+                int y, double boxlx, double boxly):
+    """
+    Compute in Cython the gyration tensor entry at position (x,y)
     
+    ----------
+    Parameters
+    ----------
+    posList: numpy array
+        the positions of the relevant beads/atoms
+    x: int
+        position 1 in tensor
+    y: int
+        position 2 in tensor
+    boxlx: float
+        box length in first direction
+    boxly: float
+        box length in second direction
+    
+    -------
+    Returns
+    -------
+    gxy: float
+        gyration tensor entry G[x,y]
+    """
+    
+    cdef np.ndarray[double,ndim=1,mode="c"] posList = np.array(poslist)
+    cdef int N = int(len(posList)/3)
+    gxy = gyrtensxy(&posList[0],N,x,y,boxlx,boxly)
+    
+    return gxy
+
 def squashRNGCOOCython(rng,apermol):
     """
     Reduces radius neighbors graph to a new graph based on molecules instead of
@@ -106,3 +144,5 @@ def squashRNGCOOCython(rng,apermol):
         if col > row:
             molrng[row,col] = 1
     return csr_matrix(molrng)
+    
+
