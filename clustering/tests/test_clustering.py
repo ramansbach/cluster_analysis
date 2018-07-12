@@ -1012,6 +1012,146 @@ def test_ang_spread_10mols45():
     angMat = snap.angSpread(cutoff,ainds)
     expangMat = np.array([[10,0.2484,0.1]])
     npt.assert_array_almost_equal(angMat,expangMat,decimal=4)
+    
+"""
+Test nearest-neighbor angle spread
+"""
+def test_nnang_spread_1mol():
+    """
+    For one molecule, the output should be an empty matrix 
+    """
+    trj = op.join(data_path,'DFAG.gro')    
+    ats = 29
+    molno = 1
+    t = 0
+    cutoff = 0.5
+    ainds = np.arange(9,20)
+    snap = cl.ContactClusterSnapshotXTC(t,trj,ats,molno)
+    snap.setClusterID(cutoff)
+    angMat = snap.nnangSpread(ainds)
+    expangMat = np.array([])
+    #pdb.set_trace()
+    npt.assert_array_almost_equal(angMat,expangMat)
+    
+def test_nnang_spread_2mols_no_rotate_short():
+    """
+    two molecules parallel to one another should make an angle of 0 and
+    by definition stddev should be 0
+    """
+    #initialize dummy snapshot
+    trj = op.join(data_path,'DFAG.gro')    
+    ats = 29
+    molno = 1
+    t = 0
+    cutoff = 2.
+    ainds = np.arange(0,3)
+    snap = cl.ContactClusterSnapshotXTC(t,trj,ats,molno)
+   
+    #reset all snapshot properties
+    snap.nclusts = 1
+    snap.box = np.array([20,20,20])
+    snap.clusterIDs = [0,0]
+    snap.pos = np.array([[0.,0.,0.,1.,0.,0.,2.,0.,0.],
+                         [0.,1.,0.,1.,1.,0.,2.,1.,0.]])
+    snap.setClusterID(cutoff)
+    angMat = snap.nnangSpread(ainds)
+    expangMat = np.array([[2,0.,0.]])
+    npt.assert_array_almost_equal(angMat,expangMat)
+    
+def test_nnang_spread_2mols_rotate180():
+ 
+    #initialize dummy snapshot
+    trj = op.join(data_path,'DFAG.gro')    
+    ats = 29
+    molno = 1
+    t = 0
+    cutoff = 2.
+    ainds = np.arange(0,3)
+    snap = cl.ContactClusterSnapshotXTC(t,trj,ats,molno)
+    
+    #reset all snapshot properties
+    snap.nclusts = 1
+    snap.box = np.array([20,20,20])
+    snap.clusterIDs = [0,0]
+    snap.pos = np.array([[0.,0.,0.,1.,0.,0.,2.,0.,0.],
+                         [2.,1.,0.,1.,1.,0.,0.,1.,0.]])
+    snap.setClusterID(cutoff)
+    angMat = snap.nnangSpread(ainds)
+    expangMat = np.array([[2,0.,0.]])
+    npt.assert_array_almost_equal(angMat,expangMat)  
+    
+def test_nnang_spread_2mols_rotate_long90():
+    #initialize dummy snapshot
+    trj = op.join(data_path,'DFAG.gro')    
+    ats = 29
+    molno = 1
+    t = 0
+    cutoff = 2.
+    ainds = np.arange(0,3)
+    snap = cl.ContactClusterSnapshotXTC(t,trj,ats,molno)
+    
+    #reset all snapshot properties
+    snap.nclusts = 1
+    snap.box = np.array([20,20,20])
+    snap.clusterIDs = [0,0]
+    snap.pos = np.array([[0.,0.,0.,1.,0.,0.,2.,0.,0.],
+                         [1.,1.,1.,1.,1.,0.,1.,1.,-1.]])
+    snap.setClusterID(cutoff)
+    angMat = snap.nnangSpread(ainds)
+    expangMat = np.array([[2,np.pi/2,0]])
+    npt.assert_array_almost_equal(angMat,expangMat)
+    
+def test_nnang_spread_2mols_rotate_long45():
+    #initialize dummy snapshot
+    trj = op.join(data_path,'DFAG.gro')    
+    ats = 29
+    molno = 1
+    t = 0
+    cutoff = 2
+    ainds = np.arange(0,3)
+    snap = cl.ContactClusterSnapshotXTC(t,trj,ats,molno)
+    
+    #reset all snapshot properties
+    snap.nclusts = 1
+    snap.box = np.array([20,20,20])
+    snap.clusterIDs = [0,0]
+    snap.pos = np.array([[0.,0.,0.,1.,0.,0.,2.,0.,0.],
+                         [1-np.sin(np.pi/4),1.,0.-np.cos(np.pi/4),1.,1.,0.,
+                          1.+np.sin(np.pi/4),1.,np.cos(np.pi/4)]])
+    snap.setClusterID(cutoff)
+    angMat = snap.nnangSpread(ainds)
+    expangMat = np.array([[2,np.pi/4,0.]])
+    npt.assert_array_almost_equal(angMat,expangMat,decimal=4)
+    
+def test_nnang_spread_10mols45():
+    #initialize dummy snapshot
+    trj = op.join(data_path,'DFAG.gro')    
+    ats = 29
+    molno = 1
+    t = 0
+    cutoff = 1.
+    ainds = np.arange(0,3)
+    snap = cl.ContactClusterSnapshotXTC(t,trj,ats,molno)
+    #reset all snapshot properties
+    snap.nclusts = 1
+    snap.box = np.array([30,30,30])
+    snap.clusterIDs = [0,0,0,0,0,0,0,0,0,0]
+    snap.pos = np.array([[0.,0.,0.,1.,0.,0.,2.,0.,0.],
+                         [0.,1.,0.,1.,1.,0.,2.,1.,0.],
+                         [0.,2.,0.,1.,2.,0.,2.,2.,0.],
+                         [0.,3.,0.,1.,3.,0.,2.,3.,0.],
+                         [0.,4.,0.,1.,4.,0.,2.,4.,0.],
+                         [1-np.sin(np.pi/4),5.,0.-np.cos(np.pi/4),1.,5.,0.,
+                          1.+np.sin(np.pi/4),5.,np.cos(np.pi/4)],
+                         [0.,6.,0.,1.,6.,0.,2.,6.,0.],
+                         [0.,7.,0.,1.,7.,0.,2.,7.,0.],
+                         [0.,8.,0.,1.,8.,0.,2.,8.,0.],
+                         [0.,9.,0.,1.,9.,0.,2.,9.,0.]])
+   
+    snap.setClusterID(cutoff)
+    angMat = snap.nnangSpread(ainds)
+    expangMat = np.array([[10,0.17453292519943295,0.34632803675275337]])
+    npt.assert_array_almost_equal(angMat,expangMat)
 """
 def test_valid_metric():
     loop = 10

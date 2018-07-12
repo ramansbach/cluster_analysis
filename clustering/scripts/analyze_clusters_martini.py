@@ -38,7 +38,7 @@ def test_trajectory():
     ats = 33
     tstart = 0
     ttotal = 4000
-    comIDs = np.array([[9,10,11],[13,14,15],[18,19,20]])
+    comIDs = COMS
     cldict = {'contact':0.5*0.5,'optical':0.7*0.7}
     start = time.time()
     syst = cl.SnapSystem(trj,ats,molno,cldict,compairs=comIDs, 

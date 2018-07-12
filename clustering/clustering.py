@@ -1272,17 +1272,17 @@ class SnapSystem(object):
         if ctype not in self.clsnaps.keys():
             raise NotImplementedError("Unknown cluster type in angspread")
         cutoff = self.cldict[ctype]
-        t = 0
+        
         if self.comm.Get_rank() == 0:
             fid = open(fname,'w')
             clsnaps = self.clsnaps[ctype]
             for clsnap in clsnaps:
                 angspreadmat = clsnap.angSpread(cutoff,ainds)
                 for i in range(np.shape(angspreadmat)[0]):
-                    fid.write('{0}\t{1}\t{2}\t{3}\n'.format(t,
+                    fid.write('{0}\t{1}\t{2}\t{3}\n'.format(clsnap.timestep,
                               angspreadmat[i,0],angspreadmat[i,1],
                               angspreadmat[i,2]))
-            t += 1
+            
             fid.close()
         
 class ClusterSnapshot(object):
@@ -1366,6 +1366,7 @@ class ContactClusterSnapshot(ClusterSnapshot):
         self.timestep = t
         self.ats = ats
         self.box = None
+        self.rng = None
         if type(trajectory) is np.ndarray:
             carray = trajectory
             self.timestep = int(carray[0])
@@ -1513,6 +1514,8 @@ class ContactClusterSnapshot(ClusterSnapshot):
         BT = BallTree(pos3,metric='euclidean')
         rng = radius_neighbors_graph(BT,np.sqrt(cutoff))
         rng = squashRNGCOOCython(rng,int(sz[1]/3))
+        self.rng = rng
+        
         (nclusts,clusterIDs) = connected_components(rng,directed=False,
                                             return_labels=True,
                                             connection='weak')
@@ -1859,6 +1862,137 @@ class ContactClusterSnapshot(ClusterSnapshot):
                 angSpreadMat[clustID,2] = np.mean(thlsmat[:,1])
         return angSpreadMat
         
+    def nnangSpread(self,ainds,tol=1e-16):
+        """
+        For each bond, check the angle between the two participating molecules
+        
+        ----------
+        Parameters
+        ----------
+        ainds: indices of aromatic positions
+        tol: float
+            tolerance for numerical imprecision
+        -------
+        Returns
+        -------
+        angspreadMat: C x 3 numpy array
+            col 1 is cluster size
+            col 2 is the mean angle between bonded molecules
+            col 3 is the stddev between bonded molecules
+            
+        ------
+        Raises
+        ------
+        NotImplementedError:
+            if rng is still set to None or clusterIDs are still set to -1
+        ValueError:
+            if you try to take the arccos of a value > 1
+        """
+        if self.rng is None:
+            raise NotImplementedError("Must set adjacency matrix first")
+        if self.clusterIDs[0] == -1:
+            raise NotImplementedError("Must set cluster IDs first")
+            
+        tinds = np.zeros(3*len(ainds)).astype(int)
+        ind = 0
+        for aind in ainds:
+            aind3 = np.arange(3*aind,(3*aind+3))
+            tinds[ind:ind+3] = aind3
+            ind += 3
+        ainds = tinds
+        binds = getIndsCsr(self.rng)
+        angspreadMat = np.zeros((self.nclusts,3))
+        m = np.shape(binds)[0]
+        if m == 0:
+            return np.array([])
+        thidMat = np.zeros((np.shape(binds)[0],2))
+        #pdb.set_trace()
+        for i in range(m):
+            bi = binds[i,0]
+            bj = binds[i,1]
+            
+            pi = self.pos[bi,:]
+            pj = self.pos[bj,:]
+            pi = pi[ainds]
+            pj = pj[ainds]
+            gi = self.gyrPrinc(pi)
+            gj = self.gyrPrinc(pj)
+            dij = abs(np.dot(gi,gj))
+            if dij > 1 and dij < 1 + 10*tol:
+                dij = 1.
+            if dij > 1. or dij is np.nan:
+                raise ValueError("Cannot take arccos of value > 1")
+            thij = np.arccos(dij)
+            thidMat[i,1] = thij
+            thidMat[i,0] = self.clusterIDs[bi]
+        
+        for cid in self.clusterIDs:
+            csize = len(np.argwhere(self.clusterIDs==cid))
+            thinds = np.argwhere(thidMat[:,0] == cid)
+            angspreadMat[cid,0] = csize
+            angspreadMat[cid,1] = np.mean(thidMat[thinds,1])
+            if m > 1:
+                ddof = 1
+            else:
+                ddof = 0
+            angspreadMat[cid,2] = np.std(thidMat[thinds,1],ddof=ddof)
+            #pdb.set_trace()
+        return angspreadMat
+        
+        
+    def getIntermixByCluster(self):
+        """
+        Figure out the number of bonds between same types, the number of
+        bonds between different types, and the total number of bonds for
+        each cluster
+        
+        -------
+        Returns
+        -------
+        nbs: C x 4 numpy array of ints
+            col 1 is cluster size
+            col 2 is the number of connections between like molecules
+            col 3 is number of connections between unlike molecules
+            col 4 is number of total connections between molecules
+
+        ------
+        Raises
+        ------
+        Not Implemented Error: if rng is still set to None or clusterIDs are
+        still set to -1
+            
+        -----
+        Notes
+        -----
+        * should double-check for whether we need to divide by two for 
+        symmetric bonds
+        """
+        if self.rng is None:
+            raise NotImplementedError("Must set adjacency matrix first")
+        if self.clusterIDs[0] == -1:
+            raise NotImplementedError("Must set cluster IDs first")
+        binds = getIndsCsr(self.rng)
+        nbs = np.zeros((self.nclusts,4)).astype(int)
+        m = np.shape(binds)[0]
+        for i in range(m):
+            bi = binds[i,0]
+            bj = binds[i,1]
+            ti = self.typeIDs[bi]
+            tj = self.typeIDs[bj]
+            if ti == tj:
+                nbs[self.clusterIDs[bi],1] += 1
+            else:
+                nbs[self.clusterIDs[bi],2] += 1 
+            nbs[self.clusterIDs[bi],3] += 1
+
+        #if self.timestep > 0:
+        #    pdb.set_trace()
+        for i in range(self.nclusts):
+            nbs[i,0] = len(np.argwhere(self.clusterIDs==i))
+            
+            
+        return nbs
+        
 class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
     """
     Contact cluster that maintains indices of different molecule types.
@@ -1957,58 +2091,7 @@ class ContactClusterHeteroSnapshot(ContactClusterSnapshot):
         #pdb.set_trace()
         return (nclusts,clusterIDs,BT)
     
-    def getIntermixByCluster(self):
-        """
-        Figure out the number of bonds between same types, the number of
-        bonds between different types, and the total number of bonds for
-        each cluster
-        
-        -------
-        Returns
-        -------
-        nbs: C x 4 numpy array of ints
-            col 1 is cluster size
-            col 2 is the number of connections between like molecules
-            col 3 is number of connections between unlike molecules
-            col 4 is number of total connections between molecules
-
-        ------
-        Raises
-        ------
-        Not Implemented Error: if rng is still set to None or clusterIDs are
-        still set to -1
-            
-        -----
-        Notes
-        -----
-        * should double-check for whether we need to divide by two for 
-        symmetric bonds
-        """
-        if self.rng is None:
-            raise NotImplementedError("Must set adjacency matrix first")
-        if self.clusterIDs[0] == -1:
-            raise NotImplementedError("Must set cluster IDs first")
-        binds = getIndsCsr(self.rng)
-        nbs = np.zeros((self.nclusts,4)).astype(int)
-        m = np.shape(binds)[0]
-        for i in range(m):
-            bi = binds[i,0]
-            bj = binds[i,1]
-            ti = self.typeIDs[bi]
-            tj = self.typeIDs[bj]
-            if ti == tj:
-                nbs[self.clusterIDs[bi],1] += 1
-            else:
-                nbs[self.clusterIDs[bi],2] += 1 
-            nbs[self.clusterIDs[bi],3] += 1
-
-        #if self.timestep > 0:
-        #    pdb.set_trace()
-        for i in range(self.nclusts):
-            nbs[i,0] = len(np.argwhere(self.clusterIDs==i))
-            
-            
-        return nbs
+    
         
 class OpticalClusterSnapshot(ContactClusterSnapshot):
     """Class for tracking the location of optical clusters at each time step"""
@@ -2052,6 +2135,7 @@ class OpticalClusterSnapshot(ContactClusterSnapshot):
         self.timestep = t
         self.ats = ats
         self.box = None
+        self.rng = None
         if type(trajectory) is np.ndarray:
             carray = trajectory
             self.timestep = int(carray[0])
@@ -2551,7 +2635,7 @@ class ContactClusterSnapshotXTC(ContactClusterSnapshot):
         self.nclusts = molno
         self.clusterIDs = np.zeros(molno)
         (self.pos,self.box) = self.readGro(trj)
-        
+        self.rng = None
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()
@@ -2620,6 +2704,7 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
         self.clusterIDs = np.zeros(molno)
         (self.pos,boxL) = self.readGro(trj)
         self.box = boxL
+        self.rng = None
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()

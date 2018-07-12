@@ -46,8 +46,8 @@ def run_ang_spread():
     cldict = {'contact':0.5*0.5,'optical':0.7*0.7}
     
 
-    cfname = op.join(data_path,'pull-test-contact-CIDs.dat')
-    ofname = op.join(data_path,'pull-test-optical-CIDs.dat')    
+    cfname = op.join(data_path,'contact-CIDs.dat')
+    ofname = op.join(data_path,'optical-CIDs.dat')    
     
     start = time.time()
     syst = cl.SnapSystem(trj,ats,molno,cldict,compairs=comIDs, 
