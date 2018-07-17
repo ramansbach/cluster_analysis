@@ -6,8 +6,8 @@
 
 #$ -m abe                   # email on abort, begin, and end
 #$ -M mansbac2@illinois.edu      # email address
-#$ -o mu2-AAA-SCSCSC-BBB.log
-#$ -N mu2-AAA-SCSCSC-BBB            # job name
+#$ -o mu2-AAA-02-SCSCSC-150-BBB.log
+#$ -N mu2-AAA-02-SCSCSC-150-BBB            # job name
 #$ -j y
 #$ -q all.q                 # queue name
 #$ -pe orte 1             # parallel environment & # cores
@@ -33,7 +33,7 @@ echo "-------------------"
 echo " "
 
 cd $SGE_O_WORKDIR
-python analyze_cut_mu2.py
+python analyze_cut_mu2_het.py
 echo " "
 echo "This job is DONE!"
 echo " "

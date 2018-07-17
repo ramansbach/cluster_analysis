@@ -6,8 +6,8 @@
 
 #$ -m abe                   # email on abort, begin, and end
 #$ -M mansbac2@illinois.edu      # email address
-#$ -o corrd-AAA-SCSCSC-BBB.log
-#$ -N corrd-AAA-SCSCSC-BBB            # job name
+#$ -o corrd-AAA-02-SCSCSC-150-BBB.log
+#$ -N corrd-AAA-02-SCSCSC-150-BBB            # job name
 #$ -j y
 #$ -q all.q                 # queue name
 #$ -pe orte 1             # parallel environment & # cores
@@ -33,7 +33,7 @@ echo "-------------------"
 echo " "
 
 cd $SGE_O_WORKDIR
-python corrdim_timing.py
+python corrdim_timing_het.py
 echo " "
 echo "This job is DONE!"
 echo " "

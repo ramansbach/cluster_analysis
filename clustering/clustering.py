@@ -1284,6 +1284,42 @@ class SnapSystem(object):
                               angspreadmat[i,2]))
             
             fid.close()
+            
+    def writeNNAngSpread(self,ctype,fname,ainds):
+        """
+        Write to file the NN angle data for each (t,c) pair where t is
+        the timestep and c is the cluster size
+        
+        ----------
+        Parameters
+        ----------
+        ctype: string
+            cluster type
+        fname: string
+            name of file to write to
+        ainds: list of ints
+            the indices of the aromatic beads
+        ------
+        Raises
+        ------
+        NotImplementedError:
+            if the cluster type is unknown
+        """
+        if ctype not in self.clsnaps.keys():
+            raise NotImplementedError("Unknown cluster type in angspread")
+        cutoff = self.cldict[ctype]
+        
+        if self.comm.Get_rank() == 0:
+            fid = open(fname,'w')
+            clsnaps = self.clsnaps[ctype]
+            for clsnap in clsnaps:
+                angspreadmat = clsnap.nnangSpread(ainds)
+                for i in range(np.shape(angspreadmat)[0]):
+                    fid.write('{0}\t{1}\t{2}\t{3}\n'.format(clsnap.timestep,
+                              angspreadmat[i,0],angspreadmat[i,1],
+                              angspreadmat[i,2]))
+            
+            fid.close()
         
 class ClusterSnapshot(object):
     """Class for tracking the location of clusters at each time step"""
@@ -1908,9 +1944,9 @@ class ContactClusterSnapshot(ClusterSnapshot):
         thidMat = np.zeros((np.shape(binds)[0],2))
         #pdb.set_trace()
         for i in range(m):
-            bi = binds[i,0]
-            bj = binds[i,1]
-            
+            bi = int(binds[i,0])
+            bj = int(binds[i,1])
+            #pdb.set_trace()
             pi = self.pos[bi,:]
             pj = self.pos[bj,:]
             pi = pi[ainds]
@@ -1930,13 +1966,16 @@ class ContactClusterSnapshot(ClusterSnapshot):
             csize = len(np.argwhere(self.clusterIDs==cid))
             thinds = np.argwhere(thidMat[:,0] == cid)
             angspreadMat[cid,0] = csize
-            angspreadMat[cid,1] = np.mean(thidMat[thinds,1])
-            if m > 1:
-                ddof = 1
-            else:
-                ddof = 0
-            angspreadMat[cid,2] = np.std(thidMat[thinds,1],ddof=ddof)
-            #pdb.set_trace()
+            if csize >= 2:
+                angspreadMat[cid,1] = np.mean(thidMat[thinds,1])
+                
+                if csize == 2:
+                    ddof = 0
+                else:
+                    ddof = 1
+                
+                angspreadMat[cid,2] = np.std(thidMat[thinds,1],ddof=ddof)
+                #pdb.set_trace()
         return angspreadMat
         
         
@@ -2705,6 +2744,7 @@ class OpticalClusterSnapshotXTC(ContactClusterSnapshotXTC):
         (self.pos,boxL) = self.readGro(trj)
         self.box = boxL
         self.rng = None
+        
         if len(self.pos) != 3 * molno * ats:
             raise RuntimeError("incorrect number of atoms or molecules")
         #pdb.set_trace()

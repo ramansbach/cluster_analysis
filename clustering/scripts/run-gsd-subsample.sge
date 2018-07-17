@@ -6,8 +6,8 @@
 
 #$ -m abe                   # email on abort, begin, and end
 #$ -M mansbac2@illinois.edu      # email address
-#$ -o gss-AAA-SCSCSC-BBB.log
-#$ -N gss-AAA-SCSCSC-BBB            # job name
+#$ -o gss-AAA-02-SCSCSC-150-BBB.log
+#$ -N gss-AAA-02-SCSCSC-150-BBB            # job name
 #$ -j y
 #$ -q all.q                 # queue name
 #$ -pe orte 1             # parallel environment & # cores
@@ -34,12 +34,12 @@ echo " "
 
 cd $SGE_O_WORKDIR
 
-FSKIP=4
+FSKIP=1
 
 for i in `seq 1 5`; do
 #i=1
-	FIN=/data/mansbac2/coarsegraining/patchy/fulltraj/mols10000_AAA-SCSCSC-BBB_run$i\.gsd
-	FOUT=/data/mansbac2/coarsegraining/patchy/fulltraj/mols10000_AAA-SCSCSC-BBB_short_run$i\.gsd
+	FIN=/data/mansbac2/coarsegraining/move_external/patchy/heterogeneous/FFF/250-02-SCSCSC-150-BBB/mols10000_AAA-02-SCSCSC-150-BBB_short_run$i\.gsd
+	FOUT=/data/mansbac2/coarsegraining/move_external/patchy/heterogeneous/FFF/250-02-SCSCSC-150-BBB/mols10000_AAA-02-SCSCSC-150-BBB_small_run$i\.gsd
 	python gsdSubsample.py $FIN $FOUT $FSKIP
 done
 

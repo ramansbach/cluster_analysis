@@ -39,6 +39,8 @@ def test_trajectory():
     tstart = 0
     ttotal = 4000
     comIDs = COMS
+    cainds = CAINDS
+    oainds = OAINDS
     cldict = {'contact':0.5*0.5,'optical':0.7*0.7}
     start = time.time()
     syst = cl.SnapSystem(trj,ats,molno,cldict,compairs=comIDs, 
@@ -55,10 +57,15 @@ def test_trajectory():
                                                  [24.25935]]))
     end = time.time()
     print("Time to get optical: "+str(end-start)+"\n")
-    syst.writeCIDs('contact','pull-test-contact-CIDs.dat')
-    syst.writeCIDs('optical','pull-test-optical-CIDs.dat')
-    syst.writeSizes('contact','pull-test-contact-sizes.dat')
-    syst.writeSizes('optical','pull-test-optical-sizes.dat')
+    syst.writeCIDs('contact','contact-CIDs.dat')
+    syst.writeCIDs('optical','optical-CIDs.dat')
+    syst.writeSizes('contact','contact-sizes.dat')
+    syst.writeSizes('optical','optical-sizes.dat')
     
+    start = time.time()
+    syst.writeNNAngSpread('contact','nn-angspread-contact.dat',cainds)
+    syst.writeNNAngSpread('optical','nn-angspread-optical.dat',oainds)
+    end = time.time()
+    print("Time to get/write NN angle data: "+str(end-start)+"\n")
 if __name__ == "__main__":
     test_trajectory()
